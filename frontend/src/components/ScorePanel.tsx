@@ -1,0 +1,36 @@
+import { motion } from "framer-motion";
+import { ShieldCheck, Sparkles, GitCompare } from "lucide-react";
+import type { AnalysisResult } from "../lib/api";
+import { ScoreRing } from "./ScoreRing";
+
+/** Tarjeta principal: los tres puntajes + veredicto en lenguaje simple. */
+export function ScorePanel({ r }: { r: AnalysisResult }) {
+  const { originality, plagiarism, ai_probability } = r.scores;
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      className="card p-6 md:p-8"
+    >
+      <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
+        <ScoreRing value={originality} token="good" label="Originalidad" sub="estimada" />
+        <ScoreRing value={plagiarism} token="source" label="Similitud / plagio"
+          sub={r.plagiarism.has_corpus ? "vs. corpus" : "sin corpus"} />
+        <ScoreRing value={ai_probability} token="ai" label="Probabilidad de IA"
+          sub={r.ai_detection.used_model ? "heurística + modelo" : "heurística"} />
+      </div>
+
+      <div className="mt-7 flex flex-wrap items-center gap-2">
+        <span className="chip"><ShieldCheck size={14} /> Confianza: {r.confidence.level}</span>
+        {r.plagiarism.has_corpus && (
+          <span className="chip"><GitCompare size={14} /> Similitud temática: {r.plagiarism.topical_similarity}%</span>
+        )}
+        <span className="chip"><Sparkles size={14} /> {r.meta.word_count} palabras</span>
+      </div>
+
+      <p className="mt-5 font-display text-xl leading-snug text-ink">{r.explanation.summary}</p>
+      <p className="mt-2 text-sm text-muted">{r.confidence.reason}</p>
+    </motion.section>
+  );
+}

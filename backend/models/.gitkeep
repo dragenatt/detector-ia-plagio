@@ -1,0 +1,2 @@
+# El modelo entrenado (ai_model.json) se guarda en esta carpeta al ejecutar
+# `python train.py` o el endpoint POST /api/train.

@@ -1,0 +1,31 @@
+# Python
+backend/.venv/
+**/__pycache__/
+*.pyc
+backend/veraz.db
+backend/models/ai_model.json
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+*.tsbuildinfo
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# === Datos NO publicables (privacidad / derechos de autor) ===
+# Se mantienen en tu equipo, pero NO se suben al repositorio público.
+backend/reporte_demo.pdf
+# Textos importados del historial: pueden contener datos personales reales.
+backend/training_data/**/hist*.txt
+# Textos humanos descargados de la web (copyright de terceros: Wikipedia, SciELO, obras de teatro).
+backend/training_data/humano/wiki_*.txt
+backend/training_data/humano/obra_*.txt
+backend/training_data/humano/scielo_*.txt
+backend/eval_data/humano/wiki_*.txt
+backend/eval_data/humano/play_*.txt
+backend/eval_data/humano/scielo_*.txt

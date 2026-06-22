@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+   Sistema de diseño "editorial-académico": papel cálido + tinta, un acento
+   verde de confianza y tres colores semánticos (verde=original, azul=fuente,
+   ámbar=IA). Tokens en canales RGB para poder usar opacidad en Tailwind.
+--------------------------------------------------------------------------- */
+:root {
+  --paper: 250 247 240;
+  --surface: 255 253 248;
+  --surface-2: 243 238 227;
+  --ink: 33 30 24;
+  --muted: 110 103 90;
+  --line: 229 222 207;
+  --accent: 31 111 92;
+  --accent-ink: 250 247 240;
+  --good: 21 131 95;
+  --source: 37 99 176;
+  --ai: 184 115 28;
+}
+
+.dark {
+  --paper: 21 19 14;
+  --surface: 30 27 21;
+  --surface-2: 39 35 26;
+  --ink: 242 236 223;
+  --muted: 167 158 139;
+  --line: 51 45 35;
+  --accent: 70 175 145;
+  --accent-ink: 16 22 19;
+  --good: 80 190 152;
+  --source: 110 170 235;
+  --ai: 216 166 92;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-paper text-ink font-sans antialiased;
+    /* Textura sutil de grano para dar atmósfera, no un fondo plano. */
+    background-image: radial-gradient(
+      rgb(var(--ink) / 0.025) 0.5px,
+      transparent 0.5px
+    );
+    background-size: 4px 4px;
+    min-height: 100vh;
+  }
+  ::selection {
+    background: rgb(var(--accent) / 0.22);
+  }
+  /* Scrollbar discreta. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgb(var(--line));
+    border-radius: 999px;
+    border: 3px solid rgb(var(--paper));
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-line bg-surface shadow-soft;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-line
+           bg-surface-2 px-3 py-1 text-xs font-medium text-muted;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5
+           text-sm font-semibold transition-all duration-200
+           disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-accent text-accent-ink shadow-soft
+           hover:brightness-110 hover:shadow-lift active:scale-[0.98];
+  }
+  .btn-ghost {
+    @apply btn border border-line bg-surface text-ink hover:bg-surface-2;
+  }
+}
+
+/* Resaltado de fragmentos en el texto analizado. */
+.hl-original {
+  background: transparent;
+}
+.hl-ia {
+  background: rgb(var(--ai) / 0.18);
+  box-shadow: inset 0 -2px 0 rgb(var(--ai) / 0.55);
+  border-radius: 3px;
+}
+.hl-plagio {
+  background: rgb(var(--source) / 0.16);
+  box-shadow: inset 0 -2px 0 rgb(var(--source) / 0.55);
+  border-radius: 3px;
+}
+.hl-mixto {
+  background: linear-gradient(
+    to bottom,
+    rgb(var(--ai) / 0.14),
+    rgb(var(--source) / 0.16)
+  );
+  box-shadow: inset 0 -2px 0 rgb(var(--ink) / 0.4);
+  border-radius: 3px;
+}

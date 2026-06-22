@@ -1,0 +1,20 @@
+# --- Capa web (API) ---
+fastapi>=0.110
+uvicorn>=0.29          # servidor ASGI. Para autorecarga: pip install watchfiles
+pydantic>=2.6
+python-multipart>=0.0.9  # necesario para subir archivos
+
+# --- Lectura de archivos ---
+pypdf>=4.0             # extraer texto de PDF
+python-docx>=1.1       # extraer texto de DOCX
+
+# --- Reportes ---
+fpdf2>=2.7             # generar el reporte PDF
+
+# NOTA: el MOTOR de análisis (carpeta app/analysis y app/model) es Python puro
+# y NO necesita ninguna de estas librerías. Solo la API web y la lectura de
+# archivos las requieren. Pruebas del motor: `python tests/test_engine.py`.
+#
+# Mejora opcional (no requerida) para mayor precisión:
+#   scikit-learn        -> TF-IDF y clasificadores más robustos
+#   sentence-transformers / numpy -> similitud por embeddings semánticos

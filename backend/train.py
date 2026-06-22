@@ -1,0 +1,44 @@
+"""CLI para entrenar el detector de IA desde el corpus etiquetado.
+
+Uso (desde la carpeta backend/):
+    python train.py
+    python train.py --epochs 1200 --lr 0.08
+
+Lee los textos de training_data/<etiqueta>/ y guarda models/ai_model.json.
+"""
+import argparse
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from app.config import MODEL_PATH, TRAINING_DIR   # noqa: E402
+from app.model.trainer import train               # noqa: E402
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Entrena el detector de IA de Veraz.")
+    parser.add_argument("--data", default=str(TRAINING_DIR),
+                        help="Carpeta con el corpus etiquetado.")
+    parser.add_argument("--out", default=str(MODEL_PATH),
+                        help="Ruta de salida del modelo (JSON).")
+    parser.add_argument("--epochs", type=int, default=800)
+    parser.add_argument("--lr", type=float, default=0.1)
+    args = parser.parse_args()
+
+    print("Entrenando con el corpus en:", args.data)
+    report = train(args.data, args.out, epochs=args.epochs, lr=args.lr)
+
+    print("\n--- Resultado del entrenamiento ---")
+    print("Conteo por etiqueta:", report.get("counts"))
+    print(f"Textos humanos: {report.get('n_human')}  |  Textos IA: {report.get('n_ai')}")
+    if report.get("trained"):
+        print(f"Precisión (entrenamiento): {report.get('train_accuracy')}")
+        if report.get("holdout_accuracy") is not None:
+            print(f"Precisión (validación):    {report.get('holdout_accuracy')}")
+        print(f"Modelo guardado en: {report.get('model_path')}")
+    print("\n" + report.get("message", ""))
+
+
+if __name__ == "__main__":
+    main()
