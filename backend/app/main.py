@@ -231,5 +231,26 @@ def train_endpoint() -> dict:
 # servicio (sin Node en tiempo de ejecución), ideal para el lanzador de
 # escritorio. Se monta al final para no tapar las rutas /api.
 _DIST_DIR = config.BACKEND_DIR.parent / "frontend" / "dist"
-if _DIST_DIR.exists():
+if (_DIST_DIR / "index.html").exists():
     app.mount("/", StaticFiles(directory=str(_DIST_DIR), html=True), name="frontend")
+else:
+    # Si la interfaz no está compilada, en vez de un críptico 404
+    # ({"detail":"Not Found"}) damos una explicación clara de qué hacer.
+    from fastapi.responses import HTMLResponse
+
+    @app.get("/", response_class=HTMLResponse)
+    def _frontend_no_compilado() -> str:
+        return (
+            "<html><head><meta charset='utf-8'><title>Veraz</title></head>"
+            "<body style='font-family:sans-serif;max-width:640px;margin:60px auto;"
+            "line-height:1.6;color:#222'>"
+            "<h1>Veraz · interfaz no compilada</h1>"
+            "<p>La API está funcionando, pero la interfaz web "
+            "(<code>frontend/dist</code>) no se encuentra.</p>"
+            "<p>Para generarla necesitas <b>Node 18+</b> y ejecutar:</p>"
+            "<pre style='background:#f4f4f4;padding:12px;border-radius:8px'>"
+            "cd frontend\nnpm install\nnpm run build</pre>"
+            "<p>Luego vuelve a iniciar el lanzador. La documentación de la API "
+            "sigue disponible en <a href='/docs'>/docs</a>.</p>"
+            "</body></html>"
+        )
