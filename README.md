@@ -100,8 +100,18 @@ Python 3.14, Node 24 — perfecto.)
 
 > **Modo fácil (un solo clic):** el backend sirve también la interfaz ya
 > compilada (`frontend/dist`), así que basta con ejecutar el backend y abrir
-> `http://localhost:8000`. En Windows hay un lanzador en el Escritorio,
-> `Veraz.bat`, que lo arranca y abre el navegador.
+> `http://localhost:8000`. En la raíz del proyecto hay un lanzador para cada
+> sistema que prepara todo la primera vez (entorno virtual, dependencias e
+> interfaz), arranca el servidor y abre el navegador:
+>
+> | Sistema | Archivo | Cómo usarlo |
+> |---------|---------|-------------|
+> | **Windows** | `Veraz.bat` | Doble clic |
+> | **macOS / Linux** | `Veraz.command` | Doble clic (en macOS puede pedir confirmación la primera vez: clic derecho → *Abrir*). Desde terminal: `./Veraz.command` |
+>
+> La primera ejecución tarda un poco (instala dependencias y compila la
+> interfaz); las siguientes son casi inmediatas. Para compilar la interfaz
+> necesitas Node 18+; sin él la API funciona igual pero la web no se sirve.
 
 ### Backend (API + interfaz)
 ```bash
