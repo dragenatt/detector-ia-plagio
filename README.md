@@ -1,12 +1,8 @@
-# Veraz · Analizador de originalidad, plagio y uso de IA
+# Veraz · Detector de IA y plagio
 
-Plataforma web para **estimar** la originalidad de un texto académico, su
-posible similitud con otras fuentes (plagio) y la probabilidad de que haya sido
-generado por IA. Está pensada para estudiantes y profesores, y muestra siempre
-los resultados como **estimaciones probabilísticas, nunca como acusaciones**.
-
-> **Aviso central del producto:** ningún detector de IA o plagio es 100 %
-> confiable. Veraz da pistas explicables para *revisar y mejorar* un texto.
+Estima la originalidad de un texto académico, su similitud con otras fuentes
+(plagio) y la probabilidad de que sea generado por IA. Los resultados son
+**estimaciones probabilísticas, no acusaciones**.
 
 ---
 
