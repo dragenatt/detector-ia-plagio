@@ -18,8 +18,40 @@ import glob
 import os
 from pathlib import Path
 
+import math
+
+from ..analysis import ai_detection
 from ..analysis import features as features_mod
-from .classifier import LogisticRegression, train_test_split
+from .classifier import LogisticRegression, platt_fit, train_test_split
+
+# Peso del modelo frente a la heurística usado en producción (engine/API).
+MODEL_WEIGHT = 0.5
+
+
+def _sigmoid(z: float) -> float:
+    if z < -60:
+        return 0.0
+    if z > 60:
+        return 1.0
+    return 1.0 / (1.0 + math.exp(-z))
+
+
+def _calibration_error(probs: list[float], y: list[int], bins: int = 5) -> dict:
+    """Brier y ECE: qué tan bien la probabilidad refleja la frecuencia real."""
+    if not probs:
+        return {"brier": None, "ece": None}
+    brier = sum((p - yi) ** 2 for p, yi in zip(probs, y)) / len(probs)
+    n = len(probs)
+    ece = 0.0
+    for b in range(bins):
+        lo, hi = b / bins, (b + 1) / bins
+        idx = [i for i, p in enumerate(probs) if (p > lo or b == 0) and p <= hi]
+        if not idx:
+            continue
+        conf = sum(probs[i] for i in idx) / len(idx)
+        acc = sum(y[i] for i in idx) / len(idx)
+        ece += (len(idx) / n) * abs(conf - acc)
+    return {"brier": round(brier, 4), "ece": round(ece, 4)}
 
 LABEL_TO_TARGET = {
     "humano": 0,
@@ -45,9 +77,10 @@ def _read_texts(folder: Path) -> list[str]:
     return texts
 
 
-def load_dataset(training_dir: str | Path) -> tuple[list, list, dict]:
+def load_dataset(training_dir: str | Path) -> tuple[list, list, dict, list]:
     training_dir = Path(training_dir)
     X, y = [], []
+    feats_list: list[dict] = []
     counts: dict[str, int] = {}
     for label, target in LABEL_TO_TARGET.items():
         folder = training_dir / label
@@ -56,9 +89,11 @@ def load_dataset(training_dir: str | Path) -> tuple[list, list, dict]:
         texts = _read_texts(folder)
         counts[label] = len(texts)
         for txt in texts:
-            X.append(features_mod.to_vector(features_mod.extract(txt)))
+            feats = features_mod.extract(txt)
+            feats_list.append(feats)
+            X.append(features_mod.to_vector(feats))
             y.append(target)
-    return X, y, counts
+    return X, y, counts, feats_list
 
 
 def _quality_metrics(clf, X, y) -> dict:
@@ -93,7 +128,7 @@ def _quality_metrics(clf, X, y) -> dict:
 def train(training_dir: str | Path, model_out: str | Path,
           epochs: int = 1000, lr: float = 0.1,
           class_weight: str | None = "balanced") -> dict:
-    X, y, counts = load_dataset(training_dir)
+    X, y, counts, feats_list = load_dataset(training_dir)
     n_human = sum(1 for v in y if v == 0)
     n_ai = sum(1 for v in y if v == 1)
 
@@ -125,11 +160,28 @@ def train(training_dir: str | Path, model_out: str | Path,
     train_acc = round(clf.accuracy(X, y), 3)
     train_metrics = _quality_metrics(clf, X, y)
 
+    # 1) Calibración del modelo (Platt sobre su logit).
+    clf.fit_calibration(X, y)
+
+    # 2) Calibración del % COMBINADO final (heurística + modelo), que es el
+    #    valor que ve el usuario. Así un "70 %" reflejará la frecuencia real.
+    def _blend(i):
+        h = ai_detection.heuristic_probability(feats_list[i])
+        m = clf.predict_proba_one(X[i])
+        return ai_detection.combine(h, m, MODEL_WEIGHT)
+
+    blends = [_blend(i) for i in range(len(X))]
+    cal_before = _calibration_error(blends, y)
+    clf.final_calibration = platt_fit([ai_detection._logit(p) for p in blends], y)
+    blends_cal = [ai_detection._apply_calibration(p, clf.final_calibration) for p in blends]
+    cal_after = _calibration_error(blends_cal, y)
+
     clf.meta = {
         "n_human": n_human, "n_ai": n_ai, "counts": counts,
         "train_accuracy": train_acc, "holdout_accuracy": test_acc,
         "class_weight": class_weight,
         "train_metrics": train_metrics, "holdout_metrics": holdout_metrics,
+        "calibration_before": cal_before, "calibration_after": cal_after,
         "feature_order": features_mod.FEATURE_ORDER,
         "n_features": len(features_mod.FEATURE_ORDER),
     }
@@ -141,6 +193,8 @@ def train(training_dir: str | Path, model_out: str | Path,
         "holdout_accuracy": test_acc,
         "train_metrics": train_metrics,
         "holdout_metrics": holdout_metrics,
+        "calibration_before": cal_before,
+        "calibration_after": cal_after,
         "model_path": str(model_out),
         "message": "Modelo entrenado y guardado correctamente.",
     })

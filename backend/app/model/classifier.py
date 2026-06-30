@@ -34,6 +34,8 @@ class LogisticRegression:
         self.bias: float = 0.0
         self.mean: list[float] = []
         self.std: list[float] = []
+        self.calibration: dict | None = None        # calibra el logit del modelo
+        self.final_calibration: dict | None = None   # calibra el % combinado final
         self.meta: dict = {}
 
     # ----- estandarización ------------------------------------------------- #
@@ -93,14 +95,45 @@ class LogisticRegression:
             self.bias -= self.lr * (grad_b / wsum)
         return self
 
+    # ----- calibración (Platt scaling) ------------------------------------- #
+    def _logit(self, x: list[float]) -> float:
+        """Logit crudo (z) del modelo para un vector ya en escala original."""
+        xs = self._scale(x)
+        return sum(w * xj for w, xj in zip(self.weights, xs)) + self.bias
+
+    def fit_calibration(self, X: list[list[float]], y: list[int],
+                        lr: float = 0.05, epochs: int = 600):
+        """Platt scaling: ajusta sigmoid(a*z + b) para que la probabilidad
+        refleje la frecuencia real (un "70 %" acierte ~70 % de las veces).
+
+        Se entrena 1 dimensión (el logit del modelo) contra las etiquetas, lo
+        que corrige el exceso de confianza típico de la regresión logística.
+        """
+        zs = [self._logit(row) for row in X]
+        a, b = 1.0, 0.0
+        n = len(zs) or 1
+        for _ in range(epochs):
+            ga = gb = 0.0
+            for z, yi in zip(zs, y):
+                p = _sigmoid(a * z + b)
+                err = p - yi
+                ga += err * z
+                gb += err
+            a -= lr * ga / n
+            b -= lr * gb / n
+        self.calibration = {"a": a, "b": b}
+        return self
+
     # ----- predicción ------------------------------------------------------ #
     def predict_proba_one(self, x: list[float]) -> float:
         if self.mean and len(x) != len(self.mean):
             raise ValueError(
                 f"El vector tiene {len(x)} rasgos pero el modelo espera "
                 f"{len(self.mean)}. Reentrena el modelo (cambió el set de rasgos).")
-        xs = self._scale(x)
-        return _sigmoid(sum(w * xj for w, xj in zip(self.weights, xs)) + self.bias)
+        z = self._logit(x)
+        if self.calibration:
+            return _sigmoid(self.calibration["a"] * z + self.calibration["b"])
+        return _sigmoid(z)
 
     def predict_one(self, x: list[float], threshold: float = 0.5) -> int:
         return int(self.predict_proba_one(x) >= threshold)
@@ -119,6 +152,8 @@ class LogisticRegression:
             "bias": self.bias,
             "mean": self.mean,
             "std": self.std,
+            "calibration": self.calibration,
+            "final_calibration": self.final_calibration,
             "hyperparams": {"lr": self.lr, "epochs": self.epochs, "l2": self.l2},
             "meta": self.meta,
         }
@@ -138,8 +173,27 @@ class LogisticRegression:
         clf.bias = data["bias"]
         clf.mean = data["mean"]
         clf.std = data["std"]
+        clf.calibration = data.get("calibration")
+        clf.final_calibration = data.get("final_calibration")
         clf.meta = data.get("meta", {})
         return clf
+
+
+def platt_fit(logits: list[float], y: list[int],
+              lr: float = 0.05, epochs: int = 600) -> dict:
+    """Ajusta sigmoid(a*z + b) sobre logits dados (Platt scaling genérico)."""
+    a, b = 1.0, 0.0
+    n = len(logits) or 1
+    for _ in range(epochs):
+        ga = gb = 0.0
+        for z, yi in zip(logits, y):
+            p = _sigmoid(a * z + b)
+            err = p - yi
+            ga += err * z
+            gb += err
+        a -= lr * ga / n
+        b -= lr * gb / n
+    return {"a": a, "b": b}
 
 
 def train_test_split(X, y, test_ratio=0.25, seed=42):

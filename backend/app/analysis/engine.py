@@ -44,8 +44,9 @@ def analyze(text: str, references: list[dict] | None = None,
         except Exception:
             model_proba = None
 
-    # 3. Detección de IA (señales + modelo).
-    ai_result = ai_detection.detect(feats, model_proba, model_weight)
+    # 3. Detección de IA (señales + modelo + calibración del % final).
+    final_calibration = getattr(model, "final_calibration", None) if model else None
+    ai_result = ai_detection.detect(feats, model_proba, model_weight, final_calibration)
 
     # 4. Detección de plagio.
     plag = plagiarism_mod.analyze(text, references)

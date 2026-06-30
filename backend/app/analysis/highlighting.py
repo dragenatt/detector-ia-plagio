@@ -15,30 +15,45 @@ from . import text_utils as tu
 
 
 def _sentence_ai_cue(sentence: str, avg_len: float) -> tuple[float, list[str]]:
-    """Puntaje local de 'parece IA' para UNA oración + razones legibles."""
+    """Puntaje local de 'parece IA' para UNA oración + razones legibles.
+
+    Usa los mismos patrones que el detector global, adaptados a una sola
+    oración, para que el resaltado ámbar coincida con lo que mide el motor.
+    """
     reasons: list[str] = []
     score = 0.0
     low = sentence.lower()
+    words = tu.words(sentence)
+    n_words = len(words)
 
-    has_generic = any(p in low for p in tu.GENERIC_PHRASES)
-    if has_generic:
-        score += 0.5
+    if any(p in low for p in tu.GENERIC_PHRASES):
+        score += 0.45
         reasons.append("contiene una frase genérica/vacía")
 
     conn = tu.count_occurrences(sentence, tu.CONNECTORS)
     if conn >= 2:
-        score += 0.2
+        score += 0.20
         reasons.append("acumula varios conectores")
-
-    n_words = len(tu.words(sentence))
-    if avg_len and n_words > 1.5 * avg_len:
+    elif conn >= 1 and tu.starts_with_opener(sentence, tu.SENTENCE_OPENERS):
         score += 0.15
+        reasons.append("abre con un conector")
+
+    if tu.count_occurrences(sentence, tu.HEDGES) >= 1:
+        score += 0.12
+        reasons.append("usa fórmulas de cautela genéricas")
+
+    if any(ch in sentence for ch in ("—", "–", "“", "”", "‘", "’")):
+        score += 0.10
+        reasons.append("usa tipografía 'pulida' (rayas o comillas curvas)")
+
+    if avg_len and n_words > 1.5 * avg_len:
+        score += 0.12
         reasons.append("es notablemente más larga que el promedio")
 
-    has_personal = (any(w in tu.PERSONAL_MARKERS for w in tu.words(sentence))
+    has_personal = (any(w in tu.PERSONAL_MARKERS for w in words)
                     or any(p in low for p in tu.PERSONAL_PHRASES))
     if not has_personal and n_words >= 12:
-        score += 0.15
+        score += 0.12
         reasons.append("no incluye voz personal")
 
     return tu.clamp(score, 0.0, 1.0), reasons

@@ -12,6 +12,8 @@ una acusación, y se recorta para evitar falsos 0 % o 100 %.
 """
 from __future__ import annotations
 
+import math
+
 from . import text_utils as tu
 
 # Cada señal: (clave, etiqueta, peso, descripción). El valor [0,1] de cada una
@@ -154,13 +156,64 @@ def _severity(value: float) -> str:
     return "baja"
 
 
+def _logit(p: float) -> float:
+    p = min(max(p, 1e-6), 1.0 - 1e-6)
+    return math.log(p / (1.0 - p))
+
+
+def _apply_calibration(p: float, calibration: dict | None) -> float:
+    """Reescala la probabilidad combinada con Platt: sigmoid(a*logit(p)+b)."""
+    if not calibration:
+        return p
+    z = calibration["a"] * _logit(p) + calibration["b"]
+    if z < -60:
+        return 0.0
+    if z > 60:
+        return 1.0
+    return 1.0 / (1.0 + math.exp(-z))
+
+
+def heuristic_probability(features: dict) -> float:
+    """Probabilidad de IA [0,1] solo por heurísticas (sin modelo)."""
+    h = sum(s["weight"] * _signal_value(s["key"], features) for s in SIGNALS)
+    return tu.clamp(h, 0.0, 1.0)
+
+
+# Peso base del modelo en la mezcla, y "piso" de evidencia heurística.
+BASE_MODEL_WEIGHT = 0.5
+ADAPTIVE_FLOOR = 0.35
+
+
+def _effective_weight(heuristic: float, base_weight: float) -> float:
+    """Reduce el peso del modelo cuando la heurística NO ve marcas de IA.
+
+    Evita falsos positivos: un modelo puede equivocarse con confianza por
+    correlaciones espurias (p. ej. 'palabras largas') en textos académicos
+    humanos. Si la estilometría no detecta señales de IA, el modelo no
+    condena por sí solo (filosofía multi-señal: una sola señal no basta).
+    """
+    if heuristic >= ADAPTIVE_FLOOR:
+        return base_weight
+    return base_weight * (heuristic / ADAPTIVE_FLOOR)
+
+
+def combine(heuristic: float, model_proba: float | None,
+            base_weight: float = BASE_MODEL_WEIGHT) -> float:
+    """Mezcla heurística + modelo con peso adaptativo (probabilidad cruda)."""
+    if model_proba is None:
+        return heuristic
+    w = _effective_weight(heuristic, base_weight)
+    return w * model_proba + (1 - w) * heuristic
+
+
 def detect(features: dict, model_proba: float | None = None,
-           model_weight: float = 0.5) -> dict:
+           model_weight: float = 0.5, final_calibration: dict | None = None) -> dict:
     """Calcula la probabilidad de IA y el desglose por señal.
 
-    - features      : dict de features.extract()
-    - model_proba   : probabilidad [0,1] del clasificador entrenado (o None).
-    - model_weight  : cuánto pesa el modelo frente a las heurísticas (0..1).
+    - features         : dict de features.extract()
+    - model_proba      : probabilidad [0,1] del clasificador entrenado (o None).
+    - model_weight     : cuánto pesa el modelo frente a las heurísticas (0..1).
+    - final_calibration: Platt {a,b} para que el % final refleje la realidad.
     """
     breakdown = []
     heuristic = 0.0
@@ -179,12 +232,11 @@ def detect(features: dict, model_proba: float | None = None,
 
     heuristic = tu.clamp(heuristic, 0.0, 1.0)
 
-    if model_proba is None:
-        combined = heuristic
-        used_model = False
-    else:
-        combined = model_weight * model_proba + (1 - model_weight) * heuristic
-        used_model = True
+    combined = combine(heuristic, model_proba, model_weight)
+    used_model = model_proba is not None
+
+    # Calibración del valor combinado: que el "%" signifique lo que dice.
+    combined = _apply_calibration(combined, final_calibration)
 
     # Recorte: jamás afirmamos 0 % ni 100 % (ningún detector es infalible).
     probability = round(tu.clamp(combined, 0.03, 0.97) * 100)

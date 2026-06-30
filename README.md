@@ -82,6 +82,21 @@ existe). Se recorta a `[3 %, 97 %]` para no afirmar nunca certezas absolutas.
 > de IA que humanos) no sesgue el resultado, y el entrenamiento reporta
 > **precisión, recall y F1** además de la exactitud. El corpus humano se amplió
 > con ejemplos variados para enseñarle mejor qué *no* es IA.
+>
+> **Probabilidad calibrada:** el % final se calibra con *Platt scaling* para que
+> un "70 %" refleje la frecuencia real (se reporta el error de calibración,
+> ECE/Brier). Además, un **peso adaptativo** evita falsos positivos: si la
+> estilometría no ve marcas de IA, el modelo no condena por sí solo un texto
+> académico humano formal.
+>
+> **Evaluación honesta:** `python evaluate.py` mide sobre un set apartado
+> (`eval_data/`, nunca usado para entrenar) la matriz de confusión, precisión,
+> recall, F1 y la calibración. Útil para ver si cada cambio mejora o empeora.
+
+### Resaltado por oración (`highlighting.py`)
+Cada oración recibe un puntaje de IA y de plagio. En la interfaz, las oraciones
+con marcas de IA se resaltan en **ámbar con intensidad proporcional** al puntaje
+(más marcado = más "parece IA"), y las que coinciden con una fuente, en azul.
 
 ### Detección de plagio (`plagiarism.py`)
 - **Coincidencia textual (n-gramas de 5 palabras):** qué fracción del texto

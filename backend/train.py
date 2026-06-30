@@ -40,6 +40,10 @@ def main() -> None:
         if hm:
             print(f"Detección de IA -> precisión: {hm['precision_ia']}  "
                   f"recall: {hm['recall_ia']}  F1: {hm['f1_ia']}")
+        cb, ca = report.get("calibration_before"), report.get("calibration_after")
+        if cb and ca:
+            print(f"Calibración (ECE) antes: {cb['ece']}  ->  después: {ca['ece']}  "
+                  "(más bajo = el % refleja mejor la realidad)")
         print(f"Modelo guardado en: {report.get('model_path')}")
     print("\n" + report.get("message", ""))
 
