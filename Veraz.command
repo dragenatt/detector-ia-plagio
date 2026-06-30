@@ -24,7 +24,7 @@ elif command -v python >/dev/null 2>&1; then
     PY="python"
 fi
 if [ -z "$PY" ]; then
-    echo "[ERROR] No se encontro Python. Instala Python 3.10+ desde"
+    echo "[ERROR] No se encontro Python. Instala Python 3.8 o superior desde"
     echo "        https://www.python.org/downloads/ (o 'brew install python')."
     read -r -p "Pulsa Enter para cerrar..."
     exit 1

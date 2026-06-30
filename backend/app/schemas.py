@@ -1,6 +1,8 @@
 """Modelos Pydantic para validar las peticiones de la API."""
 from __future__ import annotations
 
+from typing import Optional
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -9,7 +11,8 @@ class AnalyzeRequest(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
     text: str = Field(..., min_length=1, description="Texto a analizar.")
-    title: str | None = Field(None, description="Título opcional para el historial.")
+    # Optional[str] (no 'str | None') para compatibilidad con Python 3.8/3.9.
+    title: Optional[str] = Field(None, description="Título opcional para el historial.")
     use_model: bool = Field(True, description="Usar el modelo entrenado si existe.")
     model_weight: float = Field(0.5, ge=0.0, le=1.0,
                                 description="Peso del modelo vs. heurísticas.")

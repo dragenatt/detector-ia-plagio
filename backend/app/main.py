@@ -13,6 +13,7 @@ from __future__ import annotations
 import glob
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import List
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -123,7 +124,7 @@ async def analyze_file_endpoint(file: UploadFile = File(...),
 # --------------------------------------------------------------------------- #
 
 @app.get("/api/history")
-def history() -> list[dict]:
+def history() -> List[dict]:  # List[...] (no list[...]) por compat. con Python 3.8
     return db.list_analyses()
 
 

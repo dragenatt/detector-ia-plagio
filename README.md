@@ -119,8 +119,13 @@ como JSON. Si no hay modelo, el sistema funciona igual solo con heurísticas.
 
 ## 4. Cómo correrlo paso a paso
 
-Necesitas **Python 3.10+** y **Node 18+**. (Detectados en tu equipo:
-Python 3.14, Node 24 — perfecto.)
+Necesitas **Python 3.8 o superior**. (Node solo hace falta para *desarrollar*
+la interfaz; para usar la app no, porque ya viene compilada.)
+
+> **Windows 8 / Windows 10 antiguo:** las versiones nuevas de Python exigen un
+> Windows 10 reciente. Si el tuyo está desactualizado, instala **Python 3.8.10**
+> (la app es compatible y ese instalador sí funciona en Windows 7/8/8.1):
+> <https://www.python.org/downloads/release/python-3810/> → *Windows installer (64-bit)*.
 
 > **Modo fácil (un solo clic):** el backend sirve también la interfaz ya
 > compilada (`frontend/dist`), así que basta con ejecutar el backend y abrir

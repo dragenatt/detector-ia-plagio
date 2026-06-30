@@ -21,8 +21,9 @@ if not defined PY (
     where python >nul 2>nul && set "PY=python"
 )
 if not defined PY (
-    echo [ERROR] No se encontro Python. Instala Python 3.10+ desde
+    echo [ERROR] No se encontro Python. Instala Python 3.8 o superior desde
     echo         https://www.python.org/downloads/ y marca "Add to PATH".
+    echo         (Windows 8 o Windows 10 antiguo: usa Python 3.8.10, que si los soporta).
     pause
     exit /b 1
 )
