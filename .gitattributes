@@ -1,0 +1,21 @@
+# Asegura los saltos de línea correctos por plataforma, sin importar el SO
+# en el que se haga checkout. Esto evita que el lanzador de Windows se rompa
+# (un .bat con saltos Unix "parpadea y se cierra").
+
+# Lanzador de Windows: SIEMPRE CRLF.
+*.bat            text eol=crlf
+*.cmd            text eol=crlf
+
+# Lanzador de macOS/Linux y scripts shell: SIEMPRE LF.
+*.command        text eol=lf
+*.sh             text eol=lf
+
+# Código: normaliza a LF en el repo (comportamiento estándar).
+*.py             text eol=lf
+*.ts             text eol=lf
+*.tsx            text eol=lf
+*.js             text eol=lf
+*.json           text eol=lf
+*.css            text eol=lf
+*.html           text eol=lf
+*.md             text eol=lf
