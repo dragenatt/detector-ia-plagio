@@ -25,7 +25,27 @@ CONNECTORS: set[str] = {
     "en tercer lugar", "por último", "así que", "de modo que", "de manera que",
     "con el fin de", "a fin de", "dado que", "puesto que", "ya que",
     "en definitiva", "en resumen", "en conclusión", "a su vez", "del mismo modo",
+    # ampliación: conectores que la IA tiende a encadenar
+    "por su parte", "en este contexto", "en relación con", "con respecto a",
+    "en lo que respecta", "de igual manera", "de igual forma", "de igual modo",
+    "en otras palabras", "dicho de otro modo", "como resultado", "por esta razón",
+    "por tal motivo", "a raíz de", "en virtud de", "por ello", "por tanto",
+    "cabe señalar que", "vale la pena mencionar", "en suma", "para concluir",
+    "en síntesis", "como consecuencia", "de ahí que", "es por ello que",
 }
+
+# Conectores típicos AL INICIO de oración. La IA abre muchas frases con ellos
+# ("Además, ...", "Por otro lado, ..."). Se buscan como prefijo de la oración.
+SENTENCE_OPENERS: tuple[str, ...] = (
+    "además", "asimismo", "igualmente", "sin embargo", "no obstante",
+    "por lo tanto", "por consiguiente", "en consecuencia", "por ende",
+    "de hecho", "es decir", "por ejemplo", "por otra parte", "por otro lado",
+    "por su parte", "finalmente", "en primer lugar", "en segundo lugar",
+    "en tercer lugar", "por último", "en conclusión", "en resumen",
+    "en este sentido", "en este contexto", "de igual manera", "de igual forma",
+    "como resultado", "por ello", "por tanto", "a su vez", "del mismo modo",
+    "en síntesis", "para concluir", "en definitiva",
+)
 
 # Frases "académicas pero vacías": suenan formales pero aportan poco. Los
 # modelos de IA tienden a abusar de ellas.
@@ -39,6 +59,27 @@ GENERIC_PHRASES: list[str] = [
     "es esencial", "sin lugar a dudas", "no cabe duda", "cada vez más",
     "un sinfín de", "la importancia de", "a modo de conclusión",
     "en última instancia", "resulta evidente", "es menester", "es preciso señalar",
+    # ampliación: muletillas de relleno habituales en texto generado
+    "en el ámbito de", "en el marco de", "en términos generales",
+    "desde tiempos inmemoriales", "a lo largo del tiempo", "en pocas palabras",
+    "es ampliamente reconocido", "es bien sabido", "no es ningún secreto",
+    "en el panorama actual", "en un mundo cada vez más", "vale la pena destacar",
+    "merece la pena señalar", "es crucial entender", "es vital comprender",
+    "abre un abanico de", "una amplia gama de", "una herramienta poderosa",
+    "el mundo que nos rodea", "marca una diferencia", "el futuro de",
+    "se ha convertido en", "ofrece numerosas ventajas", "presenta múltiples desafíos",
+]
+
+# Atenuadores / "hedging": fórmulas prudentes y genéricas de las que la IA
+# abusa para no comprometerse ("suele", "en general", "podría"...).
+HEDGES: list[str] = [
+    "generalmente", "en general", "por lo general", "habitualmente",
+    "normalmente", "comúnmente", "frecuentemente", "a menudo", "suele ",
+    "suelen ", "tiende a", "tienden a", "puede llegar a", "podría", "podrían",
+    "es posible que", "probablemente", "posiblemente", "en muchos casos",
+    "en algunos casos", "en ciertos casos", "en cierta medida", "hasta cierto punto",
+    "de alguna manera", "de algún modo", "relativamente", "aproximadamente",
+    "en su mayoría", "entre otros", "entre otras cosas", "diversos factores",
 ]
 
 # Marcadores de voz personal / opinión. Su AUSENCIA aporta a la señal de IA
@@ -152,6 +193,50 @@ def repeated_ngram_ratio(toks: list[str], n: int = 3) -> float:
     counts = Counter(grams)
     repeated = sum(c - 1 for c in counts.values() if c > 1)
     return repeated / len(grams)
+
+
+# Línea que es un ítem de lista o enumeración ("- ...", "* ...", "1. ...", "a) ...").
+_LIST_RE = re.compile(r"^\s*(?:[-*•·–—]|\d+[.)]|[a-zA-Z][.)])\s+", re.UNICODE)
+
+
+def is_list_line(line: str) -> bool:
+    """True si la línea empieza como un ítem de viñeta o enumeración."""
+    return bool(_LIST_RE.match(line))
+
+
+def first_word(sentence: str) -> str:
+    """Primera palabra (solo letras, en minúsculas) de una oración."""
+    m = _WORD_RE.search(sentence)
+    return m.group().lower() if m else ""
+
+
+def starts_with_opener(sentence: str, openers: Iterable[str]) -> bool:
+    """True si la oración empieza con alguno de los conectores dados."""
+    s = strip_accents(sentence.lower()).lstrip()
+    for op in openers:
+        op_n = strip_accents(op.lower())
+        if s.startswith(op_n):
+            rest = s[len(op_n):]
+            if rest == "" or not rest[0].isalpha():  # respeta el límite de palabra
+                return True
+    return False
+
+
+def moving_avg_ttr(toks: list[str], window: int = 50) -> float:
+    """Type-Token Ratio de media móvil: diversidad léxica robusta a la longitud.
+
+    El TTR simple cae cuanto más largo es el texto, lo que sesga la comparación.
+    Promediar el TTR sobre ventanas de tamaño fijo lo corrige. 1 = muy diverso.
+    """
+    if not toks:
+        return 0.0
+    if len(toks) <= window:
+        return len(set(toks)) / len(toks)
+    ratios = []
+    for i in range(len(toks) - window + 1):
+        chunk = toks[i:i + window]
+        ratios.append(len(set(chunk)) / window)
+    return sum(ratios) / len(ratios)
 
 
 def safe_div(a: float, b: float, default: float = 0.0) -> float:

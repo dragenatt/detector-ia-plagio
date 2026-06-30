@@ -50,7 +50,22 @@ class LogisticRegression:
         return [(x[j] - self.mean[j]) / self.std[j] for j in range(len(x))]
 
     # ----- entrenamiento --------------------------------------------------- #
-    def fit(self, X: list[list[float]], y: list[int]):
+    def _class_weights(self, y, class_weight):
+        """Devuelve (peso_clase_0, peso_clase_1).
+
+        'balanced' compensa el desbalance del corpus (p. ej. muchos más textos
+        de IA que humanos) para que la clase minoritaria no quede aplastada.
+        """
+        if class_weight == "balanced":
+            n = len(y)
+            n_pos = sum(1 for v in y if v == 1) or 1
+            n_neg = (n - n_pos) or 1
+            return n / (2.0 * n_neg), n / (2.0 * n_pos)
+        if isinstance(class_weight, dict):
+            return float(class_weight.get(0, 1.0)), float(class_weight.get(1, 1.0))
+        return 1.0, 1.0
+
+    def fit(self, X: list[list[float]], y: list[int], class_weight=None):
         if not X:
             raise ValueError("No hay datos de entrenamiento.")
         self._fit_scaler(X)
@@ -59,24 +74,31 @@ class LogisticRegression:
         self.weights = [0.0] * d
         self.bias = 0.0
         n = len(Xs)
+        w0, w1 = self._class_weights(y, class_weight)
+        wsum = sum(w1 if yi == 1 else w0 for yi in y) or 1.0
 
         for _ in range(self.epochs):
             grad_w = [0.0] * d
             grad_b = 0.0
             for xi, yi in zip(Xs, y):
+                wi = w1 if yi == 1 else w0
                 pred = _sigmoid(sum(w * xj for w, xj in zip(self.weights, xi)) + self.bias)
-                err = pred - yi
+                err = (pred - yi) * wi
                 for j in range(d):
                     grad_w[j] += err * xi[j]
                 grad_b += err
             for j in range(d):
-                grad_w[j] = grad_w[j] / n + self.l2 * self.weights[j]
+                grad_w[j] = grad_w[j] / wsum + self.l2 * self.weights[j]
                 self.weights[j] -= self.lr * grad_w[j]
-            self.bias -= self.lr * (grad_b / n)
+            self.bias -= self.lr * (grad_b / wsum)
         return self
 
     # ----- predicción ------------------------------------------------------ #
     def predict_proba_one(self, x: list[float]) -> float:
+        if self.mean and len(x) != len(self.mean):
+            raise ValueError(
+                f"El vector tiene {len(x)} rasgos pero el modelo espera "
+                f"{len(self.mean)}. Reentrena el modelo (cambió el set de rasgos).")
         xs = self._scale(x)
         return _sigmoid(sum(w * xj for w, xj in zip(self.weights, xs)) + self.bias)
 

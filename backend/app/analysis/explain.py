@@ -49,6 +49,12 @@ def build(features: dict, ai_result: dict, plagiarism: dict,
         human_signals.append("Las oraciones varían bastante en longitud (ritmo natural).")
     if features["informal_density"] > 0:
         human_signals.append("Aparecen expresiones informales o coloquiales.")
+    if features.get("mattr", 0) >= 0.80:
+        human_signals.append("El vocabulario es rico y variado (poca repetición de palabras).")
+    if features.get("sentence_start_diversity", 1) >= 0.8:
+        human_signals.append("Las oraciones empiezan de formas distintas (aperturas variadas).")
+    if features.get("hedging_density", 0) < 1.0 and features.get("generic_phrase_density", 0) < 0.5:
+        human_signals.append("Las afirmaciones son concretas, con pocas generalidades de relleno.")
     if not human_signals:
         human_signals.append("Se detectaron pocas marcas humanas evidentes.")
 

@@ -33,9 +33,13 @@ def main() -> None:
     print("Conteo por etiqueta:", report.get("counts"))
     print(f"Textos humanos: {report.get('n_human')}  |  Textos IA: {report.get('n_ai')}")
     if report.get("trained"):
-        print(f"Precisión (entrenamiento): {report.get('train_accuracy')}")
+        print(f"Exactitud (entrenamiento): {report.get('train_accuracy')}")
         if report.get("holdout_accuracy") is not None:
-            print(f"Precisión (validación):    {report.get('holdout_accuracy')}")
+            print(f"Exactitud (validación):    {report.get('holdout_accuracy')}")
+        hm = report.get("holdout_metrics") or report.get("train_metrics")
+        if hm:
+            print(f"Detección de IA -> precisión: {hm['precision_ia']}  "
+                  f"recall: {hm['recall_ia']}  F1: {hm['f1_ia']}")
         print(f"Modelo guardado en: {report.get('model_path')}")
     print("\n" + report.get("message", ""))
 

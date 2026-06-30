@@ -70,6 +70,12 @@ if not exist "..\frontend\dist\index.html" (
     )
 )
 
+REM --- 4b. Entrenar el detector la primera vez (si no hay modelo) ----
+if not exist "models\ai_model.json" (
+    echo [*] Entrenando el detector con el corpus incluido (solo la primera vez)...
+    "%VENV_PY%" train.py
+)
+
 REM --- 5. Iniciar el servidor y abrir el navegador -------------------
 echo.
 echo  Iniciando Veraz en http://127.0.0.1:8000

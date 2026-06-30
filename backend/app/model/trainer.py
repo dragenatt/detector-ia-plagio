@@ -61,8 +61,38 @@ def load_dataset(training_dir: str | Path) -> tuple[list, list, dict]:
     return X, y, counts
 
 
+def _quality_metrics(clf, X, y) -> dict:
+    """Precisión, exhaustividad (recall) y F1 para la clase 'IA' (=1).
+
+    La exactitud sola engaña con clases desbalanceadas; estas métricas dicen
+    cuántas IA detecta de verdad (recall) y cuántas de sus avisos aciertan
+    (precision).
+    """
+    tp = fp = tn = fn = 0
+    for xi, yi in zip(X, y):
+        p = clf.predict_one(xi)
+        if p == 1 and yi == 1:
+            tp += 1
+        elif p == 1 and yi == 0:
+            fp += 1
+        elif p == 0 and yi == 0:
+            tn += 1
+        else:
+            fn += 1
+    precision = tp / (tp + fp) if (tp + fp) else 0.0
+    recall = tp / (tp + fn) if (tp + fn) else 0.0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
+    return {
+        "precision_ia": round(precision, 3),
+        "recall_ia": round(recall, 3),
+        "f1_ia": round(f1, 3),
+        "confusion": {"tp": tp, "fp": fp, "tn": tn, "fn": fn},
+    }
+
+
 def train(training_dir: str | Path, model_out: str | Path,
-          epochs: int = 800, lr: float = 0.1) -> dict:
+          epochs: int = 1000, lr: float = 0.1,
+          class_weight: str | None = "balanced") -> dict:
     X, y, counts = load_dataset(training_dir)
     n_human = sum(1 for v in y if v == 0)
     n_ai = sum(1 for v in y if v == 1)
@@ -83,19 +113,25 @@ def train(training_dir: str | Path, model_out: str | Path,
 
     # Validación simple si hay suficientes datos.
     test_acc = None
+    holdout_metrics = None
     if n_human + n_ai >= 12:
         Xtr, ytr, Xte, yte = train_test_split(X, y, test_ratio=0.25)
-        clf.fit(Xtr, ytr)
+        clf.fit(Xtr, ytr, class_weight=class_weight)
         test_acc = round(clf.accuracy(Xte, yte), 3)
+        holdout_metrics = _quality_metrics(clf, Xte, yte)
 
-    # Entrenamiento final con TODOS los datos.
-    clf.fit(X, y)
+    # Entrenamiento final con TODOS los datos (compensando el desbalance).
+    clf.fit(X, y, class_weight=class_weight)
     train_acc = round(clf.accuracy(X, y), 3)
+    train_metrics = _quality_metrics(clf, X, y)
 
     clf.meta = {
         "n_human": n_human, "n_ai": n_ai, "counts": counts,
         "train_accuracy": train_acc, "holdout_accuracy": test_acc,
+        "class_weight": class_weight,
+        "train_metrics": train_metrics, "holdout_metrics": holdout_metrics,
         "feature_order": features_mod.FEATURE_ORDER,
+        "n_features": len(features_mod.FEATURE_ORDER),
     }
     clf.save(model_out)
 
@@ -103,6 +139,8 @@ def train(training_dir: str | Path, model_out: str | Path,
         "trained": True,
         "train_accuracy": train_acc,
         "holdout_accuracy": test_acc,
+        "train_metrics": train_metrics,
+        "holdout_metrics": holdout_metrics,
         "model_path": str(model_out),
         "message": "Modelo entrenado y guardado correctamente.",
     })

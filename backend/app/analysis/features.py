@@ -34,6 +34,15 @@ FEATURE_ORDER: list[str] = [
     "personal_voice_density",
     "informal_density",
     "burstiness",
+    # --- rasgos nuevos (más patrones para distinguir IA de humano) ---
+    "sentence_start_diversity",       # variedad de palabras al inicio de oración
+    "sentence_opener_ratio",          # % de oraciones que abren con conector
+    "paragraph_len_cv",               # uniformidad de longitud de párrafos
+    "list_marker_ratio",              # proporción de líneas tipo lista/enumeración
+    "hedging_density",                # atenuadores prudentes ("suele", "en general")
+    "mattr",                          # diversidad léxica robusta (TTR media móvil)
+    "repeated_bigram_ratio",          # repetición de pares de palabras
+    "typographic_density",            # comillas tipográficas y rayas "pulidas"
 ]
 
 
@@ -84,6 +93,43 @@ def extract(text: str) -> dict:
     stopwords = sum(1 for w in word_list if w in tu.STOPWORDS_ES)
     stopword_ratio = tu.safe_div(stopwords, n_words)
     repeated_trigram_ratio = tu.repeated_ngram_ratio(toks, 3)
+    repeated_bigram_ratio = tu.repeated_ngram_ratio(toks, 2)
+
+    # --- Patrones nuevos -------------------------------------------------- #
+    # Aperturas de oración: la IA repite la primera palabra y abre muchas
+    # frases con conectores ("Además, ...", "Por otro lado, ...").
+    first_words = [tu.first_word(s["text"]) for s in sents]
+    first_words = [w for w in first_words if w]
+    sentence_start_diversity = (
+        tu.safe_div(len(set(first_words)), len(first_words)) if first_words else 1.0
+    )
+    opener_hits = sum(1 for s in sents if tu.starts_with_opener(s["text"], tu.SENTENCE_OPENERS))
+    sentence_opener_ratio = tu.safe_div(opener_hits, n_sents)
+
+    # Uniformidad de párrafos: la IA produce párrafos de tamaño muy parecido.
+    paras = tu.paragraphs(text)
+    para_word_counts = [len(tu.words(p)) for p in paras]
+    if len(para_word_counts) >= 2:
+        p_mean = sum(para_word_counts) / len(para_word_counts)
+        paragraph_len_cv = tu.safe_div(statistics.pstdev(para_word_counts), p_mean)
+    else:
+        paragraph_len_cv = 0.5  # neutro: con un solo párrafo no es informativo
+
+    # Estructura de listas/enumeraciones (muy frecuente en respuestas de IA).
+    non_empty_lines = [ln for ln in text.splitlines() if ln.strip()]
+    list_lines = sum(1 for ln in non_empty_lines if tu.is_list_line(ln))
+    list_marker_ratio = tu.safe_div(list_lines, len(non_empty_lines))
+
+    # Atenuadores / hedging.
+    hedge_count = tu.count_occurrences(text, tu.HEDGES)
+    hedging_density = per100(hedge_count)
+
+    # Diversidad léxica robusta a la longitud.
+    mattr = tu.moving_avg_ttr(word_list, window=50)
+
+    # Marcas tipográficas "pulidas": rayas y comillas curvas que la IA inserta.
+    typographic_count = sum(text.count(ch) for ch in ("—", "–", "“", "”", "‘", "’", "…"))
+    typographic_density = per100(typographic_count)
 
     # "Burstiness": qué tan irregular es el ritmo. Los humanos alternan
     # oraciones muy cortas y muy largas; la IA tiende a un ritmo plano.
@@ -109,14 +155,26 @@ def extract(text: str) -> dict:
         "personal_voice_density": round(personal_voice_density, 4),
         "informal_density": round(informal_density, 4),
         "burstiness": round(burstiness, 4),
+        # rasgos nuevos
+        "sentence_start_diversity": round(sentence_start_diversity, 4),
+        "sentence_opener_ratio": round(sentence_opener_ratio, 4),
+        "paragraph_len_cv": round(paragraph_len_cv, 4),
+        "list_marker_ratio": round(list_marker_ratio, 4),
+        "hedging_density": round(hedging_density, 4),
+        "mattr": round(mattr, 4),
+        "repeated_bigram_ratio": round(repeated_bigram_ratio, 4),
+        "typographic_density": round(typographic_density, 4),
         # conteos crudos (para explicaciones y depuración)
         "_word_count": n_words,
         "_sentence_count": len(sents),
         "_char_count": n_chars,
+        "_paragraph_count": len(paras),
         "_connector_count": connector_count,
         "_generic_count": generic_count,
         "_personal_count": personal_count,
         "_informal_count": informal_count,
+        "_hedge_count": hedge_count,
+        "_opener_count": opener_hits,
     }
 
 

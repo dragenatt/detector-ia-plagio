@@ -58,21 +58,34 @@ avanzados. FastAPI, la lectura de archivos y el PDF solo se usan en la capa web.
 ## 2 + 3. Cómo funciona cada módulo
 
 ### Detección de IA — sistema multi-señal explicable (`ai_detection.py`)
-No es una regla única. Calcula **9 señales independientes**, cada una en `[0,1]`
+No es una regla única. Calcula **14 señales independientes**, cada una en `[0,1]`
 con su explicación, y las combina con pesos:
 
 | Señal | Qué mira |
 |-------|----------|
+| Frases genéricas / vacías | "cabe destacar", "hoy en día"… |
+| Exceso de conectores | "además", "por lo tanto"… en exceso |
+| Oraciones que abren con conector | Muchas frases empiezan con "Además,", "Por otro lado," |
 | Uniformidad de oraciones | Longitudes demasiado parecidas entre sí |
 | Ritmo plano (burstiness) | Falta de alternancia corto/largo |
-| Exceso de conectores | "además", "por lo tanto"… en exceso |
-| Frases genéricas / vacías | "cabe destacar", "hoy en día"… |
-| Poca voz personal | Ausencia de opinión/experiencia en 1ª persona |
-| Repetición de ideas | n-gramas repetidos |
+| Repetición de ideas | n-gramas (trigramas/bigramas) repetidos |
+| Aperturas repetitivas | Las oraciones empiezan siempre con las mismas palabras |
+| Vocabulario poco variado | Diversidad léxica baja (MATTR, robusto a la longitud) |
+| Exceso de cautela / generalidades | Atenuadores "suele", "en general", "podría"… |
+| Párrafos de tamaño uniforme | Longitudes de párrafo llamativamente parejas |
+| Estructura de listas | Mucho contenido en viñetas/enumeraciones |
 | Redacción "demasiado limpia" | Sin marcas informales ni errores humanos |
+| Tipografía "pulida" | Rayas (—) y comillas curvas que rara vez teclea alguien |
+| Poca voz personal | Ausencia de opinión/experiencia en 1ª persona |
 
 La probabilidad final mezcla estas heurísticas con el **modelo entrenado** (si
 existe). Se recorta a `[3 %, 97 %]` para no afirmar nunca certezas absolutas.
+
+> **Aprendizaje mejorado:** el clasificador usa ahora **ponderación de clases
+> (`class_weight="balanced"`)** para que el desbalance del corpus (más textos
+> de IA que humanos) no sesgue el resultado, y el entrenamiento reporta
+> **precisión, recall y F1** además de la exactitud. El corpus humano se amplió
+> con ejemplos variados para enseñarle mejor qué *no* es IA.
 
 ### Detección de plagio (`plagiarism.py`)
 - **Coincidencia textual (n-gramas de 5 palabras):** qué fracción del texto

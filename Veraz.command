@@ -59,6 +59,12 @@ if [ ! -f "../frontend/dist/index.html" ]; then
     fi
 fi
 
+# --- 4b. Entrenar el detector la primera vez (si no hay modelo) -----
+if [ ! -f "models/ai_model.json" ]; then
+    echo "[*] Entrenando el detector con el corpus incluido (solo la primera vez)..."
+    "$VENV_PY" train.py || echo "[AVISO] No se pudo entrenar; el detector usara solo heuristicas."
+fi
+
 # --- 5. Abrir el navegador y arrancar el servidor ------------------
 URL="http://127.0.0.1:8000"
 echo
