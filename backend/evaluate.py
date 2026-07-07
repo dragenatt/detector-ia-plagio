@@ -3,6 +3,9 @@ para entrenar. Así medimos la mejora de forma honesta (sin datos en muestra).
 
     eval_data/ia/      -> textos de IA      (se espera IA alta,  >= umbral)
     eval_data/humano/  -> textos humanos    (se espera IA baja,  <  umbral)
+    eval_data/mixto/   -> IA editada por humano (se espera valor INTERMEDIO,
+                          no un extremo: el detector no debe "condenar" ni
+                          "absolver" un texto mitad y mitad)
 
 Reporta matriz de confusión, precisión, recall y F1 para la clase "IA", además
 del error de calibración (qué tan bien el "%" refleja la probabilidad real).
@@ -18,6 +21,7 @@ from app.config import MODEL_PATH                  # noqa: E402
 from app.model.trainer import load_model           # noqa: E402
 
 THRESHOLD = 50  # IA% a partir del cual se clasifica como "IA"
+MIXED_RANGE = (30, 70)  # banda aceptable para textos mixtos (IA editada)
 EVAL_DIR = Path(__file__).resolve().parent / "eval_data"
 
 
@@ -97,6 +101,22 @@ def run() -> None:
     print(f"  F1:         {round(f1, 3)}")
     print(f"\n--- Calibración (¿el % significa lo que dice?) ---")
     print(f"  Brier: {cal['brier']}   ECE: {cal['ece']}   (más bajo = mejor)")
+
+    # Textos mixtos (IA editada por humano): deben caer en la banda media,
+    # nunca en un extremo. Se reportan aparte (no entran en la matriz binaria).
+    mixed_dir = EVAL_DIR / "mixto"
+    mixed_files = sorted(mixed_dir.glob("*.txt")) if mixed_dir.exists() else []
+    if mixed_files:
+        lo, hi = MIXED_RANGE
+        in_range = 0
+        print(f"\n--- Textos mixtos (se espera IA entre {lo}% y {hi}%) ---")
+        for fp_path in mixed_files:
+            ia = analyze(fp_path.read_text(encoding="utf-8"),
+                         model=model)["scores"]["ai_probability"]
+            ok = lo <= ia <= hi
+            in_range += int(ok)
+            print(f"  [mixto ] IA={ia:>3}%  {'OK' if ok else '<-- FUERA DE RANGO'}  {fp_path.name}")
+        print(f"  En rango: {in_range}/{len(mixed_files)}")
 
 
 if __name__ == "__main__":

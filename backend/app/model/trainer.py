@@ -19,10 +19,11 @@ import os
 from pathlib import Path
 
 import math
+import random
 
 from ..analysis import ai_detection
 from ..analysis import features as features_mod
-from .classifier import LogisticRegression, platt_fit, train_test_split
+from .classifier import LogisticRegression, platt_fit
 
 # Peso del modelo frente a la heurística usado en producción (engine/API).
 MODEL_WEIGHT = 0.5
@@ -125,8 +126,80 @@ def _quality_metrics(clf, X, y) -> dict:
     }
 
 
+def _stratified_folds(y: list[int], k: int, seed: int = 42) -> list[list[int]]:
+    """Reparte los índices en k folds manteniendo la proporción de clases."""
+    rng = random.Random(seed)
+    folds: list[list[int]] = [[] for _ in range(k)]
+    for cls in (0, 1):
+        idx = [i for i, v in enumerate(y) if v == cls]
+        rng.shuffle(idx)
+        for pos, i in enumerate(idx):
+            folds[pos % k].append(i)
+    return folds
+
+
+def cross_validate(X: list, y: list, k: int = 5, lr: float = 0.1,
+                   epochs: int = 1000, l2: float = 0.001,
+                   class_weight: str | None = "balanced", seed: int = 42) -> dict:
+    """Validación cruzada k-fold: cada texto se evalúa con un modelo que NO lo
+    vio al entrenar. Así las métricas no dependen de la suerte de un corte.
+
+    Devuelve el F1 por fold (media y desviación) y las métricas agregadas
+    sobre las predicciones "fuera de muestra" de todos los folds.
+    """
+    folds = _stratified_folds(y, k, seed)
+    f1_per_fold: list[float] = []
+    pooled_pred: list[int] = [0] * len(y)
+    for fold in folds:
+        if not fold:
+            continue
+        test_set = set(fold)
+        Xtr = [X[i] for i in range(len(X)) if i not in test_set]
+        ytr = [y[i] for i in range(len(y)) if i not in test_set]
+        clf = LogisticRegression(lr=lr, epochs=epochs, l2=l2)
+        clf.fit(Xtr, ytr, class_weight=class_weight)
+        tp = fp = fn = 0
+        for i in fold:
+            p = clf.predict_one(X[i])
+            pooled_pred[i] = p
+            if p == 1 and y[i] == 1:
+                tp += 1
+            elif p == 1 and y[i] == 0:
+                fp += 1
+            elif p == 0 and y[i] == 1:
+                fn += 1
+        prec = tp / (tp + fp) if (tp + fp) else 0.0
+        rec = tp / (tp + fn) if (tp + fn) else 0.0
+        f1 = 2 * prec * rec / (prec + rec) if (prec + rec) else 0.0
+        f1_per_fold.append(round(f1, 3))
+
+    n = len(f1_per_fold) or 1
+    mean = sum(f1_per_fold) / n
+    std = math.sqrt(sum((v - mean) ** 2 for v in f1_per_fold) / n)
+
+    # Métricas agregadas sobre TODAS las predicciones fuera de muestra.
+    tp = sum(1 for p, yi in zip(pooled_pred, y) if p == 1 and yi == 1)
+    fp = sum(1 for p, yi in zip(pooled_pred, y) if p == 1 and yi == 0)
+    tn = sum(1 for p, yi in zip(pooled_pred, y) if p == 0 and yi == 0)
+    fn = sum(1 for p, yi in zip(pooled_pred, y) if p == 0 and yi == 1)
+    prec = tp / (tp + fp) if (tp + fp) else 0.0
+    rec = tp / (tp + fn) if (tp + fn) else 0.0
+    f1 = 2 * prec * rec / (prec + rec) if (prec + rec) else 0.0
+    return {
+        "k": k,
+        "f1_folds": f1_per_fold,
+        "f1_mean": round(mean, 3),
+        "f1_std": round(std, 3),
+        "accuracy": round((tp + tn) / max(len(y), 1), 3),
+        "precision_ia": round(prec, 3),
+        "recall_ia": round(rec, 3),
+        "f1_ia": round(f1, 3),
+        "confusion": {"tp": tp, "fp": fp, "tn": tn, "fn": fn},
+    }
+
+
 def train(training_dir: str | Path, model_out: str | Path,
-          epochs: int = 1000, lr: float = 0.1,
+          epochs: int = 1000, lr: float = 0.1, l2: float = 0.01,
           class_weight: str | None = "balanced") -> dict:
     X, y, counts, feats_list = load_dataset(training_dir)
     n_human = sum(1 for v in y if v == 0)
@@ -143,17 +216,20 @@ def train(training_dir: str | Path, model_out: str | Path,
             "Mientras tanto, el detector funciona solo con heurísticas.")
         return report
 
-    clf = LogisticRegression(lr=lr, epochs=epochs,
+    clf = LogisticRegression(lr=lr, epochs=epochs, l2=l2,
                              feature_names=features_mod.FEATURE_ORDER)
 
-    # Validación simple si hay suficientes datos.
+    # Validación cruzada k-fold (mejor que un corte único 75/25: cada texto
+    # se evalúa fuera de muestra y las métricas no dependen de la suerte).
     test_acc = None
     holdout_metrics = None
+    cv = None
     if n_human + n_ai >= 12:
-        Xtr, ytr, Xte, yte = train_test_split(X, y, test_ratio=0.25)
-        clf.fit(Xtr, ytr, class_weight=class_weight)
-        test_acc = round(clf.accuracy(Xte, yte), 3)
-        holdout_metrics = _quality_metrics(clf, Xte, yte)
+        cv = cross_validate(X, y, k=5, lr=lr, epochs=epochs, l2=l2,
+                            class_weight=class_weight)
+        test_acc = cv["accuracy"]
+        holdout_metrics = {k: cv[k] for k in
+                           ("precision_ia", "recall_ia", "f1_ia", "confusion")}
 
     # Entrenamiento final con TODOS los datos (compensando el desbalance).
     clf.fit(X, y, class_weight=class_weight)
@@ -181,6 +257,7 @@ def train(training_dir: str | Path, model_out: str | Path,
         "train_accuracy": train_acc, "holdout_accuracy": test_acc,
         "class_weight": class_weight,
         "train_metrics": train_metrics, "holdout_metrics": holdout_metrics,
+        "cross_validation": cv,
         "calibration_before": cal_before, "calibration_after": cal_after,
         "feature_order": features_mod.FEATURE_ORDER,
         "n_features": len(features_mod.FEATURE_ORDER),
@@ -193,6 +270,7 @@ def train(training_dir: str | Path, model_out: str | Path,
         "holdout_accuracy": test_acc,
         "train_metrics": train_metrics,
         "holdout_metrics": holdout_metrics,
+        "cross_validation": cv,
         "calibration_before": cal_before,
         "calibration_after": cal_after,
         "model_path": str(model_out),

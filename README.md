@@ -77,11 +77,22 @@ con su explicación, y las combina con pesos:
 La probabilidad final mezcla estas heurísticas con el **modelo entrenado** (si
 existe). Se recorta a `[3 %, 97 %]` para no afirmar nunca certezas absolutas.
 
-> **Aprendizaje mejorado:** el clasificador usa ahora **ponderación de clases
-> (`class_weight="balanced"`)** para que el desbalance del corpus (más textos
-> de IA que humanos) no sesgue el resultado, y el entrenamiento reporta
-> **precisión, recall y F1** además de la exactitud. El corpus humano se amplió
-> con ejemplos variados para enseñarle mejor qué *no* es IA.
+> **Aprendizaje mejorado:** el clasificador usa **ponderación de clases
+> (`class_weight="balanced"`)**, se valida con **k-fold (k=5)** (F1 medio ±
+> desviación por fold, sin depender de la suerte de un corte) y aprende de una
+> **firma estilométrica profunda**: perfil de palabras funcionales ("de",
+> "que", "la"…), morfología (-mente, -ción/-miento), entropía del vocabulario
+> y rachas de oraciones de longitud "clonada". El corpus incluye **casos
+> difíciles**: IA "humanizada", humano académico formal y textos mixtos.
+>
+> **Documentos mixtos:** el texto se analiza también **por oración** (ventanas
+> con el modelo). Si el documento es heterogéneo (mitad IA, mitad humano), el
+> % global se corrige hacia la **fracción de oraciones tipo IA** en vez de caer
+> en un extremo — un texto mitad y mitad ronda el 50 %, no el 90 % ni el 10 %.
+>
+> **Confianza honesta:** el nivel (baja/media/alta) combina longitud del texto,
+> acuerdo heurística-modelo, distancia a la zona gris y heterogeneidad, y se
+> muestra junto al anillo de IA.
 >
 > **Probabilidad calibrada:** el % final se calibra con *Platt scaling* para que
 > un "70 %" refleje la frecuencia real (se reporta el error de calibración,

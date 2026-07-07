@@ -34,10 +34,16 @@ def main() -> None:
     print(f"Textos humanos: {report.get('n_human')}  |  Textos IA: {report.get('n_ai')}")
     if report.get("trained"):
         print(f"Exactitud (entrenamiento): {report.get('train_accuracy')}")
-        if report.get("holdout_accuracy") is not None:
+        cv = report.get("cross_validation")
+        if cv:
+            print(f"Validación cruzada (k={cv['k']}): "
+                  f"F1 = {cv['f1_mean']} ± {cv['f1_std']}  por fold: {cv['f1_folds']}")
+            print(f"  fuera de muestra -> exactitud: {cv['accuracy']}  "
+                  f"precisión: {cv['precision_ia']}  recall: {cv['recall_ia']}")
+        elif report.get("holdout_accuracy") is not None:
             print(f"Exactitud (validación):    {report.get('holdout_accuracy')}")
         hm = report.get("holdout_metrics") or report.get("train_metrics")
-        if hm:
+        if hm and not cv:
             print(f"Detección de IA -> precisión: {hm['precision_ia']}  "
                   f"recall: {hm['recall_ia']}  F1: {hm['f1_ia']}")
         cb, ca = report.get("calibration_before"), report.get("calibration_after")

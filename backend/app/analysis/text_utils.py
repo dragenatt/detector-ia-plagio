@@ -6,6 +6,7 @@ cualquier idioma latino.
 """
 from __future__ import annotations
 
+import math
 import re
 import unicodedata
 from collections import Counter
@@ -101,6 +102,13 @@ INFORMAL_MARKERS: list[str] = [
     "jaja", "jeje", "osea", "o sea", "la verdad", "obvio", "súper", "super",
     "buenísimo", "porfa", "tipo", "onda", "bueno,", "pues", "eh,", "mmm",
 ]
+
+# Palabras funcionales de alta frecuencia (perfil estilométrico clásico).
+# Su distribución relativa es una "firma" del autor difícil de imitar: se usa
+# como vector de rasgos individuales (frecuencia de cada una por 100 palabras).
+FUNCTION_WORDS: tuple[str, ...] = (
+    "de", "la", "que", "el", "en", "y", "a", "los", "se", "no",
+)
 
 STOPWORDS_ES: set[str] = {
     "el", "la", "los", "las", "un", "una", "unos", "unas", "de", "del", "al",
@@ -220,6 +228,65 @@ def starts_with_opener(sentence: str, openers: Iterable[str]) -> bool:
             if rest == "" or not rest[0].isalpha():  # respeta el límite de palabra
                 return True
     return False
+
+
+# Sufijos morfológicos de la prosa "administrativa" que la IA favorece:
+# adverbios en -mente y nominalizaciones (-ción, -miento, -dad...).
+_MENTE_RE = re.compile(r"mente$")
+_NOMINAL_RE = re.compile(r"(?:cion|ciones|sion|siones|miento|mientos|dad|dades)$")
+
+
+def suffix_densities(word_list: list[str]) -> tuple[float, float]:
+    """(adverbios -mente, nominalizaciones) por cada 100 palabras."""
+    if not word_list:
+        return 0.0, 0.0
+    plain = [strip_accents(w) for w in word_list]
+    mente = sum(1 for w in plain if len(w) > 6 and _MENTE_RE.search(w))
+    nominal = sum(1 for w in plain if len(w) > 5 and _NOMINAL_RE.search(w))
+    n = len(word_list)
+    return mente * 100.0 / n, nominal * 100.0 / n
+
+
+def char_trigram_diversity(text: str) -> float:
+    """Trigramas de caracteres únicos / totales: baja diversidad = prosa que
+    recicla las mismas construcciones (patrón frecuente en texto generado)."""
+    norm = normalize_for_match(text)
+    if len(norm) < 3:
+        return 1.0
+    grams = [norm[i:i + 3] for i in range(len(norm) - 2)]
+    return len(set(grams)) / len(grams)
+
+
+def vocab_entropy(word_list: list[str]) -> float:
+    """Entropía de Shannon del vocabulario, normalizada a [0,1].
+
+    1 = todas las palabras se usan por igual (máxima variedad); valores bajos
+    delatan un texto que insiste en las mismas palabras.
+    """
+    if not word_list:
+        return 0.0
+    counts = Counter(word_list)
+    n = len(word_list)
+    if len(counts) <= 1:
+        return 0.0
+    h = -sum((c / n) * math.log2(c / n) for c in counts.values())
+    return h / math.log2(len(counts))
+
+
+def similar_len_run_ratio(lengths: list[int], tolerance: float = 0.25) -> float:
+    """Racha más larga de oraciones consecutivas de longitud similar, como
+    fracción del total. Los humanos rompen el ritmo; la IA encadena oraciones
+    "clonadas" en longitud."""
+    if len(lengths) < 2:
+        return 0.0
+    best = run = 1
+    for prev, cur in zip(lengths, lengths[1:]):
+        if abs(cur - prev) <= tolerance * max(prev, cur, 1):
+            run += 1
+            best = max(best, run)
+        else:
+            run = 1
+    return best / len(lengths)
 
 
 def moving_avg_ttr(toks: list[str], window: int = 50) -> float:

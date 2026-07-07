@@ -206,6 +206,103 @@ def combine(heuristic: float, model_proba: float | None,
     return w * model_proba + (1 - w) * heuristic
 
 
+# --------------------------------------------------------------------------- #
+# Análisis por oración (ventanas deslizantes)
+# --------------------------------------------------------------------------- #
+# Una oración sola tiene poca señal estadística; usamos una ventana de la
+# oración con sus vecinas (i-1, i, i+1) y graduamos la confianza según cuántas
+# palabras aporta la ventana.
+
+MIN_WINDOW_WORDS = 12   # por debajo no se puntúa (señal insuficiente)
+FULL_CONF_WORDS = 60    # a partir de aquí la confianza local es máxima
+
+
+def sentence_scores(text: str, model=None) -> list[dict]:
+    """Puntaje de IA [0,1] por oración usando heurística + modelo sobre la
+    ventana (oración ± 1 vecina). `score` es None si no hay señal suficiente.
+    """
+    from . import features as features_mod  # import local para evitar ciclos
+
+    sents = tu.split_sentences(text)
+    out: list[dict] = []
+    for i, s in enumerate(sents):
+        window = " ".join(x["text"] for x in sents[max(0, i - 1):i + 2])
+        w_words = len(tu.words(window))
+        if w_words < MIN_WINDOW_WORDS:
+            out.append({"index": i, "score": None, "confidence": 0.0,
+                        "words": len(tu.words(s["text"]))})
+            continue
+        feats = features_mod.extract(window)
+        h = heuristic_probability(feats)
+        mp = None
+        if model is not None:
+            try:
+                mp = float(model.predict_proba_one(features_mod.to_vector(feats)))
+            except Exception:
+                mp = None
+        out.append({
+            "index": i,
+            "score": round(combine(h, mp), 4),
+            "confidence": round(tu.ramp(w_words, MIN_WINDOW_WORDS, FULL_CONF_WORDS), 4),
+            "words": len(tu.words(s["text"])),
+        })
+    return out
+
+
+def ai_sentence_fraction(scores: list[dict]) -> float | None:
+    """Fracción del texto (ponderada por palabras y confianza) cuyas oraciones
+    puntúan como IA. Es la estimación honesta para documentos MIXTOS: si la
+    mitad del texto parece IA, el resultado debe rondar el 50 %, no un extremo.
+    """
+    num = den = 0.0
+    for s in scores:
+        if s["score"] is None:
+            continue
+        # La confianza modula el peso pero no lo domina: si no, las oraciones
+        # cortas (ventana chica) desaparecerían de la fracción.
+        w = s["words"] * (0.5 + 0.5 * s["confidence"])
+        if w <= 0:
+            continue
+        # Rampa suave en vez de corte duro: una oración "casi IA" (0.5) cuenta
+        # a medias; por debajo de 0.35 no cuenta y por encima de 0.65 cuenta
+        # entera. Evita que el borde del umbral decida la fracción.
+        num += w * tu.ramp(s["score"], 0.35, 0.65)
+        den += w
+    return num / den if den else None
+
+
+MIN_SCORED_SENTENCES = 4  # mínimo de oraciones puntuadas para fiarse del mix
+
+
+def adjust_for_heterogeneity(probability: int, scores: list[dict]) -> tuple[int, dict]:
+    """Corrige el % global cuando el documento es HETEROGÉNEO (mitad IA,
+    mitad humano). El análisis global promedia rasgos y cae en un extremo;
+    la fracción de oraciones tipo IA es la estimación correcta en ese caso.
+
+    heterogeneity = 4·f·(1−f): 0 en textos puros, 1 cuando f=0.5. Solo se
+    ajusta si supera 0.5 (mezcla real), tirando el % hacia la fracción.
+    """
+    frac = ai_sentence_fraction(scores)
+    scored = sum(1 for s in scores if s["score"] is not None)
+    info = {
+        "ai_sentence_fraction": None if frac is None else round(frac, 3),
+        "heterogeneity": 0.0,
+        "adjusted": False,
+    }
+    if frac is None or scored < MIN_SCORED_SENTENCES:
+        return probability, info
+    het = 4.0 * frac * (1.0 - frac)
+    info["heterogeneity"] = round(het, 3)
+    if het <= 0.5:
+        return probability, info
+    # Cuanto más mezclado, más manda la fracción por oraciones (tope 0.85
+    # para no descartar del todo la vista global).
+    pull = min(het, 0.85)
+    p = (1 - pull) * (probability / 100.0) + pull * frac
+    info["adjusted"] = True
+    return round(tu.clamp(p, 0.03, 0.97) * 100), info
+
+
 def detect(features: dict, model_proba: float | None = None,
            model_weight: float = 0.5, final_calibration: dict | None = None) -> dict:
     """Calcula la probabilidad de IA y el desglose por señal.

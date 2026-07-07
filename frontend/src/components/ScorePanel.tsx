@@ -18,7 +18,7 @@ export function ScorePanel({ r }: { r: AnalysisResult }) {
         <ScoreRing value={plagiarism} token="source" label="Similitud / plagio"
           sub={r.plagiarism.has_corpus ? "vs. corpus" : "sin corpus"} />
         <ScoreRing value={ai_probability} token="ai" label="Probabilidad de IA"
-          sub={r.ai_detection.used_model ? "heurística + modelo" : "heurística"} />
+          sub={`${r.ai_detection.used_model ? "heurística + modelo" : "heurística"} · confianza ${r.confidence.level}`} />
       </div>
 
       <div className="mt-7 flex flex-wrap items-center gap-2">

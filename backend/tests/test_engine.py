@@ -69,8 +69,31 @@ def test_no_corpus_is_graceful():
     assert result["plagiarism"]["has_corpus"] is False
 
 
+def test_mixed_text_scores_between():
+    """Un texto mitad IA + mitad humano debe puntuar ENTRE ambos extremos,
+    no ser condenado ni absuelto por completo."""
+    mixto = IA + "\n" + HUMANO
+    ia_p = analyze(IA)["scores"]["ai_probability"]
+    hum_p = analyze(HUMANO)["scores"]["ai_probability"]
+    mix = analyze(mixto)
+    mix_p = mix["scores"]["ai_probability"]
+    _show("MIXTO (IA + humano)", mix)
+    assert hum_p < mix_p < ia_p, \
+        f"El mixto ({mix_p}%) debería quedar entre humano ({hum_p}%) e IA ({ia_p}%)."
+    assert mix["ai_detection"]["mixed"]["heterogeneity"] > 0, \
+        "El análisis por oración debería detectar heterogeneidad en un texto mixto."
+
+
+def test_confidence_fields():
+    conf = analyze(HUMANO)["confidence"]
+    assert conf["level"] in ("baja", "media", "alta")
+    assert "score" in conf and 0.0 <= conf["score"] <= 1.0
+
+
 if __name__ == "__main__":
     test_ai_higher_than_human()
     test_plagiarism_detected()
     test_no_corpus_is_graceful()
+    test_mixed_text_scores_between()
+    test_confidence_fields()
     print("\nTODAS LAS PRUEBAS PASARON [OK]")

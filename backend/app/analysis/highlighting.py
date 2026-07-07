@@ -61,13 +61,27 @@ def _sentence_ai_cue(sentence: str, avg_len: float) -> tuple[float, list[str]]:
 
 def build_segments(text: str, avg_sentence_len: float,
                    flagged_sentences: list[dict],
-                   ai_cue_threshold: float = 0.6) -> list[dict]:
+                   ai_cue_threshold: float = 0.6,
+                   sentence_ai: list[dict] | None = None) -> list[dict]:
+    """`sentence_ai`: puntajes por ventana de ai_detection.sentence_scores().
+    Si están disponibles, se mezclan con la pista local (ponderados por la
+    confianza de la ventana) para que el ámbar también use lo aprendido."""
     flagged_by_index = {f["index"]: f for f in flagged_sentences}
+    window_by_index = {s["index"]: s for s in (sentence_ai or [])}
     segments = []
     for i, sent in enumerate(tu.split_sentences(text)):
         plag = flagged_by_index.get(i)
         ai_score, ai_reasons = _sentence_ai_cue(sent["text"], avg_sentence_len)
-        is_ai = ai_score >= ai_cue_threshold
+        threshold = ai_cue_threshold
+        win = window_by_index.get(i)
+        if win and win["score"] is not None and win["confidence"] > 0:
+            w = 0.5 * win["confidence"]  # el modelo pesa según la señal local
+            ai_score = tu.clamp((1 - w) * ai_score + w * win["score"], 0.0, 1.0)
+            threshold = 0.5  # con modelo hay mejor señal: umbral estándar
+            if win["score"] >= 0.6:
+                ai_reasons.append(
+                    f"el modelo puntúa alto su entorno ({round(win['score'] * 100)}%)")
+        is_ai = ai_score >= threshold
         is_plag = plag is not None
 
         if is_plag and is_ai:

@@ -43,7 +43,13 @@ FEATURE_ORDER: list[str] = [
     "mattr",                          # diversidad léxica robusta (TTR media móvil)
     "repeated_bigram_ratio",          # repetición de pares de palabras
     "typographic_density",            # comillas tipográficas y rayas "pulidas"
-]
+    # --- rasgos profundos (firma estilométrica) ---
+    "mente_density",                  # adverbios en -mente por 100 palabras
+    "nominalization_density",         # -ción/-miento/-dad por 100 palabras
+    "char_trigram_diversity",         # variedad de trigramas de caracteres
+    "vocab_entropy",                  # entropía normalizada del vocabulario
+    "similar_len_run_ratio",          # racha de oraciones de longitud "clonada"
+] + [f"fw_{w}" for w in tu.FUNCTION_WORDS]  # perfil de palabras funcionales
 
 
 def extract(text: str) -> dict:
@@ -131,6 +137,14 @@ def extract(text: str) -> dict:
     typographic_count = sum(text.count(ch) for ch in ("—", "–", "“", "”", "‘", "’", "…"))
     typographic_density = per100(typographic_count)
 
+    # --- Firma estilométrica profunda ------------------------------------- #
+    mente_density, nominalization_density = tu.suffix_densities(word_list)
+    char_tri_div = tu.char_trigram_diversity(text)
+    vocab_ent = tu.vocab_entropy(word_list)
+    similar_run = tu.similar_len_run_ratio(sent_word_counts)
+    # Perfil de palabras funcionales: frecuencia de cada una por 100 palabras.
+    fw_profile = {f"fw_{w}": per100(counts.get(w, 0)) for w in tu.FUNCTION_WORDS}
+
     # "Burstiness": qué tan irregular es el ritmo. Los humanos alternan
     # oraciones muy cortas y muy largas; la IA tiende a un ritmo plano.
     if len(sent_word_counts) > 1 and avg_sentence_len > 0:
@@ -164,6 +178,13 @@ def extract(text: str) -> dict:
         "mattr": round(mattr, 4),
         "repeated_bigram_ratio": round(repeated_bigram_ratio, 4),
         "typographic_density": round(typographic_density, 4),
+        # firma estilométrica profunda
+        "mente_density": round(mente_density, 4),
+        "nominalization_density": round(nominalization_density, 4),
+        "char_trigram_diversity": round(char_tri_div, 4),
+        "vocab_entropy": round(vocab_ent, 4),
+        "similar_len_run_ratio": round(similar_run, 4),
+        **{k: round(v, 4) for k, v in fw_profile.items()},
         # conteos crudos (para explicaciones y depuración)
         "_word_count": n_words,
         "_sentence_count": len(sents),

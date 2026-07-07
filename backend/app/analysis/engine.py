@@ -48,16 +48,30 @@ def analyze(text: str, references: list[dict] | None = None,
     final_calibration = getattr(model, "final_calibration", None) if model else None
     ai_result = ai_detection.detect(feats, model_proba, model_weight, final_calibration)
 
+    # 3b. Análisis por oración (ventanas): puntaje local de IA con el modelo,
+    #     y corrección del % global si el documento es heterogéneo (mixto).
+    sent_scores = ai_detection.sentence_scores(text, model)
+    ai_result["probability"], mixed_info = ai_detection.adjust_for_heterogeneity(
+        ai_result["probability"], sent_scores)
+    ai_result["mixed"] = mixed_info
+
     # 4. Detección de plagio.
     plag = plagiarism_mod.analyze(text, references)
 
-    # 5. Originalidad combinada.
+    # 5. Originalidad combinada + confianza honesta.
     orig = originality_mod.compute(plag["similarity"], ai_result["probability"])
-    conf = originality_mod.confidence_level(feats["_word_count"], plag["has_corpus"])
+    model_p = ai_result["model_probability"]
+    conf = originality_mod.confidence(
+        feats["_word_count"], plag["has_corpus"],
+        heuristic_p=ai_result["heuristic_probability"] / 100.0,
+        model_p=(model_p / 100.0 if model_p is not None else None),
+        probability=ai_result["probability"],
+        heterogeneity=mixed_info["heterogeneity"])
 
-    # 6. Resaltado por oración.
+    # 6. Resaltado por oración (heurística local + modelo por ventana).
     segments = highlighting.build_segments(
-        text, feats["avg_sentence_len"], plag["flagged_sentences"])
+        text, feats["avg_sentence_len"], plag["flagged_sentences"],
+        sentence_ai=sent_scores)
 
     # 7. Explicaciones y recomendaciones.
     explanation = explain.build(feats, ai_result, plag, orig)
