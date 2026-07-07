@@ -94,6 +94,46 @@ def generate_pdf(result: dict, text: str = "", title: str | None = None) -> byte
                        new_x="LMARGIN", new_y="NEXT")
     pdf.ln(1)
 
+    # --- Desglose por oración: evidencias exactas ---
+    flagged_segments = [seg for seg in result.get("segments", [])
+                        if seg.get("category") != "original"][:12]
+    if flagged_segments:
+        _section(pdf, "Desglose por oración (evidencias exactas)")
+        for seg in flagged_segments:
+            cat = seg.get("category", "?")
+            header = f"[{cat.upper()}] "
+            if seg.get("ai_score"):
+                header += f"IA {seg['ai_score']}% "
+            if seg.get("plagiarism_overlap"):
+                header += f"- coincidencia {seg['plagiarism_overlap']}% "
+            pdf.set_font("helvetica", "B", 10)
+            pdf.set_text_color(*COLOR_INK)
+            pdf.multi_cell(0, 5, _safe(header), new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("helvetica", "I", 10)
+            sentence = seg.get("text", "")
+            if len(sentence) > 260:
+                sentence = sentence[:260].rstrip() + "..."
+            pdf.multi_cell(0, 5, _safe(f'"{sentence}"'), new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("helvetica", "", 9)
+            for ev in seg.get("evidence", [])[:8]:
+                if ev.get("kind") == "copia":
+                    pdf.set_text_color(*COLOR_PLAGIARISM)
+                    pdf.multi_cell(0, 4.5,
+                                   _safe(f"  > Copia ({ev.get('matched_words', '?')} palabras): "
+                                         f"\"{ev.get('text', '')}\""),
+                                   new_x="LMARGIN", new_y="NEXT")
+                    pdf.multi_cell(0, 4.5,
+                                   _safe(f"    Fuente: \"{ev.get('source_fragment', '')}\""),
+                                   new_x="LMARGIN", new_y="NEXT")
+                else:
+                    pdf.set_text_color(*COLOR_AI)
+                    pdf.multi_cell(0, 4.5,
+                                   _safe(f"  > {ev.get('label', ev.get('kind', ''))}: "
+                                         f"\"{ev.get('text', '')}\""),
+                                   new_x="LMARGIN", new_y="NEXT")
+            pdf.set_text_color(*COLOR_INK)
+            pdf.ln(1.5)
+
     # --- Recomendaciones ---
     _section(pdf, "Recomendaciones")
     pdf.set_font("helvetica", "", 10)

@@ -164,16 +164,20 @@ def match_tokens(text: str) -> list[str]:
 def split_sentences(text: str) -> list[dict]:
     """Divide en oraciones conservando offsets que cubren TODO el texto.
 
-    Devuelve dicts: {"text": <recortado>, "start": int, "end": int}.
-    Los offsets (start/end) cubren el texto crudo de forma contigua para que
-    el frontend pueda reconstruir el texto original exactamente al resaltar.
+    Devuelve dicts: {"text": <recortado>, "start": int, "end": int,
+    "text_start": int}. start/end cubren el texto crudo de forma contigua
+    (para reconstruirlo exacto al resaltar); text_start es el offset donde
+    empieza `text` (ya sin el espacio inicial), la base correcta para
+    calcular offsets de evidencias dentro de la oración.
     """
     out: list[dict] = []
     for m in _SENT_RE.finditer(text):
         raw = m.group()
         stripped = raw.strip()
         if stripped:
-            out.append({"text": stripped, "start": m.start(), "end": m.end()})
+            lead = len(raw) - len(raw.lstrip())
+            out.append({"text": stripped, "start": m.start(), "end": m.end(),
+                        "text_start": m.start() + lead})
     return out
 
 

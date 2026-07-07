@@ -11,7 +11,67 @@ documento exactamente e ilumina cada tramo.
 """
 from __future__ import annotations
 
+import re
+
 from . import text_utils as tu
+
+
+# --------------------------------------------------------------------------- #
+# Evidencias exactas: QUÉ palabras de la oración disparan cada señal
+# --------------------------------------------------------------------------- #
+
+def _lexicon_re(items) -> re.Pattern:
+    """Regex de alternación con límites de palabra para un léxico completo.
+    Las frases más largas van primero para que ganen a sus prefijos."""
+    parts = sorted({re.escape(x.strip()) for x in items if x.strip()},
+                   key=len, reverse=True)
+    return re.compile(r"(?<!\w)(?:" + "|".join(parts) + r")(?!\w)",
+                      re.IGNORECASE | re.UNICODE)
+
+
+# (clave, etiqueta, patrón). El orden define la prioridad visual en la UI.
+_EVIDENCE_PATTERNS: list[tuple[str, str, re.Pattern]] = [
+    ("generica", "Frase genérica / vacía", _lexicon_re(tu.GENERIC_PHRASES)),
+    ("conector", "Conector", _lexicon_re(tu.CONNECTORS)),
+    ("atenuador", "Atenuador / generalidad", _lexicon_re(tu.HEDGES)),
+]
+_TYPOGRAPHIC_CHARS = "—–“”‘’…"
+MAX_EVIDENCE_PER_SENTENCE = 12
+
+
+def find_evidence(sentence_text: str, abs_start: int) -> list[dict]:
+    """Fragmentos exactos (con offsets ABSOLUTOS en el documento) que
+    disparan señales de IA dentro de una oración."""
+    found: list[dict] = []
+    for kind, label, rx in _EVIDENCE_PATTERNS:
+        for m in rx.finditer(sentence_text):
+            found.append({
+                "kind": kind,
+                "label": label,
+                "text": m.group(),
+                "start": abs_start + m.start(),
+                "end": abs_start + m.end(),
+            })
+    for i, ch in enumerate(sentence_text):
+        if ch in _TYPOGRAPHIC_CHARS:
+            found.append({
+                "kind": "tipografia",
+                "label": "Tipografía 'pulida'",
+                "text": ch,
+                "start": abs_start + i,
+                "end": abs_start + i + 1,
+            })
+    # Sin solapamientos (gana la evidencia más temprana/larga) y con tope.
+    found.sort(key=lambda e: (e["start"], -(e["end"] - e["start"])))
+    result: list[dict] = []
+    last_end = -1
+    for e in found:
+        if e["start"] >= last_end:
+            result.append(e)
+            last_end = e["end"]
+        if len(result) >= MAX_EVIDENCE_PER_SENTENCE:
+            break
+    return result
 
 
 def _sentence_ai_cue(sentence: str, avg_len: float) -> tuple[float, list[str]]:
@@ -101,6 +161,28 @@ def build_segments(text: str, avg_sentence_len: float,
         if is_ai:
             reason_parts.append("Señales de IA: " + ", ".join(ai_reasons) + ".")
 
+        # Evidencias exactas: qué palabras disparan las señales.
+        evidence: list[dict] = []
+        if is_plag and plag.get("match"):
+            m = plag["match"]
+            evidence.append({
+                "kind": "copia",
+                "label": f"Tramo que coincide con «{plag['source']}»",
+                "text": m["text"],
+                "start": m["start"],
+                "end": m["end"],
+                "source_fragment": m["source_fragment"],
+                "matched_words": m["matched_words"],
+            })
+        if is_ai or is_plag:
+            copy_span = (evidence[0]["start"], evidence[0]["end"]) if evidence else None
+            for e in find_evidence(sent["text"], sent["text_start"]):
+                # sin solaparse con el tramo de copia (la UI trocea por offsets)
+                if copy_span and e["start"] < copy_span[1] and e["end"] > copy_span[0]:
+                    continue
+                evidence.append(e)
+            evidence.sort(key=lambda e: e["start"])
+
         segments.append({
             "index": i,
             "text": sent["text"],
@@ -109,6 +191,8 @@ def build_segments(text: str, avg_sentence_len: float,
             "category": category,
             "ai_score": round(ai_score * 100),
             "plagiarism_overlap": plag["overlap"] if plag else 0,
+            "plagiarism_source": plag["source"] if plag else None,
             "reason": " ".join(reason_parts) or "Sin señales destacadas.",
+            "evidence": evidence,
         })
     return segments

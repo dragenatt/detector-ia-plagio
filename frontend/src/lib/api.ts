@@ -51,6 +51,15 @@ export interface Plagiarism {
   has_corpus: boolean;
   note: string | null;
 }
+export interface Evidence {
+  kind: "copia" | "generica" | "conector" | "atenuador" | "tipografia";
+  label: string;
+  text: string;
+  start: number;
+  end: number;
+  source_fragment?: string;
+  matched_words?: number;
+}
 export interface Segment {
   index: number;
   text: string;
@@ -59,7 +68,9 @@ export interface Segment {
   category: Category;
   ai_score: number;
   plagiarism_overlap: number;
+  plagiarism_source?: string | null;
   reason: string;
+  evidence?: Evidence[];
 }
 export interface Explanation {
   summary: string;

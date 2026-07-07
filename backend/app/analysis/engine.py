@@ -5,7 +5,10 @@ No depende de FastAPI ni de ninguna librería externa: solo Python estándar.
 """
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
+
+logger = logging.getLogger("veraz.engine")
 
 from . import (
     ai_detection,
@@ -42,6 +45,12 @@ def analyze(text: str, references: list[dict] | None = None,
         try:
             model_proba = float(model.predict_proba_one(features_mod.to_vector(feats)))
         except Exception:
+            # Modelo incompatible (p. ej. entrenado con otro set de rasgos):
+            # se sigue solo con heurísticas, pero queda registrado.
+            logger.warning(
+                "El modelo entrenado no pudo predecir; se usan solo heurísticas. "
+                "Suele indicar un modelo viejo: reentrena con 'python train.py'.",
+                exc_info=True)
             model_proba = None
 
     # 3. Detección de IA (señales + modelo + calibración del % final).

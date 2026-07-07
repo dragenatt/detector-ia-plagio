@@ -11,14 +11,17 @@ o simplemente:
 from __future__ import annotations
 
 import glob
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+
+logger = logging.getLogger("veraz.api")
 
 from . import config, db, extract, report
 from .analysis.engine import analyze as run_analysis
@@ -45,6 +48,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Cualquier error inesperado queda LOGUEADO con contexto (ruta y tipo),
+    y el cliente recibe un mensaje claro en vez de un 500 mudo."""
+    logger.error("Error no manejado en %s %s: %s",
+                 request.method, request.url.path, exc, exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": ("Error interno al procesar la petición. "
+                            "Revisa los logs del servidor para el detalle.")},
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -78,8 +94,11 @@ def _analyze_text(text: str, req: AnalyzeRequest) -> dict:
     if not text or not text.strip():
         raise HTTPException(400, "El texto está vacío.")
     model = app.state.model if req.use_model else None
-    result = run_analysis(text, references=_all_references(),
-                          model=model, model_weight=req.model_weight)
+    try:
+        result = run_analysis(text, references=_all_references(),
+                              model=model, model_weight=req.model_weight)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     analysis_id = db.save_analysis(result, text, req.title) if req.save else None
     return {"id": analysis_id, **result}
 
@@ -111,8 +130,13 @@ async def analyze_file_endpoint(file: UploadFile = File(...),
     try:
         text = extract.extract_text(file.filename, data)
     except Exception as e:
+        logger.warning("Fallo al extraer texto de %r (%d bytes): %s",
+                       file.filename, len(data), e, exc_info=True)
         raise HTTPException(422, f"No se pudo leer el archivo: {e}")
-    req = AnalyzeRequest(text=text or " ", title=file.filename,
+    if not (text or "").strip():
+        raise HTTPException(422, ("El archivo no contiene texto extraíble "
+                                  "(¿es un PDF escaneado o un archivo vacío?)."))
+    req = AnalyzeRequest(text=text, title=file.filename,
                          use_model=use_model, save=save)
     result = _analyze_text(text, req)
     result["extracted_text"] = text
@@ -157,7 +181,12 @@ def report_pdf(analysis_id: int) -> Response:
     row = db.get_analysis(analysis_id)
     if not row or not row.get("payload"):
         raise HTTPException(404, "Análisis no encontrado.")
-    pdf_bytes = report.generate_pdf(row["payload"], row.get("text", ""), row.get("title"))
+    try:
+        pdf_bytes = report.generate_pdf(row["payload"], row.get("text", ""), row.get("title"))
+    except Exception as e:
+        logger.error("Fallo generando el PDF del análisis %s: %s",
+                     analysis_id, e, exc_info=True)
+        raise HTTPException(500, "No se pudo generar el reporte PDF de este análisis.")
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
@@ -192,7 +221,11 @@ async def references_add_file(file: UploadFile = File(...)) -> dict:
     try:
         text = extract.extract_text(file.filename, data)
     except Exception as e:
+        logger.warning("Fallo al extraer referencia de %r: %s",
+                       file.filename, e, exc_info=True)
         raise HTTPException(422, f"No se pudo leer el archivo: {e}")
+    if not (text or "").strip():
+        raise HTTPException(422, "El archivo no contiene texto extraíble.")
     ref_id = db.add_reference(file.filename, text)
     return {"id": ref_id, "name": file.filename}
 

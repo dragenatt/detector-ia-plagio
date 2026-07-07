@@ -12,6 +12,7 @@ una acusación, y se recorta para evitar falsos 0 % o 100 %.
 """
 from __future__ import annotations
 
+import logging
 import math
 
 from . import text_utils as tu
@@ -225,6 +226,7 @@ def sentence_scores(text: str, model=None) -> list[dict]:
 
     sents = tu.split_sentences(text)
     out: list[dict] = []
+    model_failed = False  # loguear una sola vez, no por cada oración
     for i, s in enumerate(sents):
         window = " ".join(x["text"] for x in sents[max(0, i - 1):i + 2])
         w_words = len(tu.words(window))
@@ -235,10 +237,14 @@ def sentence_scores(text: str, model=None) -> list[dict]:
         feats = features_mod.extract(window)
         h = heuristic_probability(feats)
         mp = None
-        if model is not None:
+        if model is not None and not model_failed:
             try:
                 mp = float(model.predict_proba_one(features_mod.to_vector(feats)))
             except Exception:
+                model_failed = True
+                logging.getLogger("veraz.ai_detection").warning(
+                    "El modelo falló al puntuar ventanas por oración; "
+                    "el resaltado seguirá solo con heurísticas.", exc_info=True)
                 mp = None
         out.append({
             "index": i,
