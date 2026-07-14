@@ -37,6 +37,11 @@ async def lifespan(app: FastAPI):
     yield
 
 
+def _current_model():
+    """Modelo cargado, tolerante a que el arranque (lifespan) no haya corrido."""
+    return getattr(app.state, "model", None)
+
+
 app = FastAPI(title="Veraz API", version="0.1.0",
               description="Estimación de originalidad, plagio y uso de IA.",
               lifespan=lifespan)
@@ -93,7 +98,7 @@ def _all_references() -> list[dict]:
 def _analyze_text(text: str, req: AnalyzeRequest) -> dict:
     if not text or not text.strip():
         raise HTTPException(400, "El texto está vacío.")
-    model = app.state.model if req.use_model else None
+    model = _current_model() if req.use_model else None
     try:
         result = run_analysis(text, references=_all_references(),
                               model=model, model_weight=req.model_weight)
@@ -109,12 +114,92 @@ def _analyze_text(text: str, req: AnalyzeRequest) -> dict:
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"status": "ok", "model_loaded": app.state.model is not None}
+    return {"status": "ok", "model_loaded": _current_model() is not None}
 
 
 @app.post("/api/analyze")
 def analyze_text_endpoint(req: AnalyzeRequest) -> dict:
     return _analyze_text(req.text, req)
+
+
+@app.post("/api/analyze/batch")
+async def analyze_batch_endpoint(files: List[UploadFile] = File(...),
+                                 use_model: bool = True) -> dict:
+    """Analiza VARIOS archivos de una vez (p. ej. los trabajos de una clase).
+
+    Devuelve una fila por archivo (IA%, plagio, originalidad, confianza) y
+    detecta además plagio CRUZADO: cada trabajo se compara contra los demás
+    del lote para descubrir si se copiaron entre sí.
+    """
+    if not files:
+        raise HTTPException(400, "No se recibió ningún archivo.")
+    if len(files) > 60:
+        raise HTTPException(400, "Máximo 60 archivos por lote.")
+
+    # 1. Extraer texto de cada archivo (los que fallen se reportan, no rompen).
+    docs: list[dict] = []
+    for f in files:
+        name = f.filename or "sin nombre"
+        ext = Path(name).suffix.lower()
+        row = {"name": name, "ok": False, "error": None}
+        if ext not in config.ALLOWED_EXTENSIONS:
+            row["error"] = f"Formato no soportado ({ext or 'desconocido'})."
+            docs.append(row)
+            continue
+        data = await f.read()
+        if len(data) > config.MAX_UPLOAD_BYTES:
+            row["error"] = "Supera el límite de 5 MB."
+            docs.append(row)
+            continue
+        try:
+            text = extract.extract_text(name, data)
+        except Exception as e:
+            logger.warning("Lote: fallo al leer %r: %s", name, e, exc_info=True)
+            row["error"] = f"No se pudo leer: {e}"
+            docs.append(row)
+            continue
+        if not (text or "").strip():
+            row["error"] = "Sin texto extraíble."
+            docs.append(row)
+            continue
+        row["ok"] = True
+        row["text"] = text
+        docs.append(row)
+
+    valid = [d for d in docs if d["ok"]]
+    corpus_refs = _all_references()
+    model = _current_model() if use_model else None
+
+    # 2. Analizar cada documento; como referencia de plagio, el corpus global
+    #    MÁS los otros documentos del lote (para detectar copia entre ellos).
+    results = []
+    for i, d in enumerate(valid):
+        others = [{"name": o["name"], "text": o["text"]}
+                  for j, o in enumerate(valid) if j != i]
+        try:
+            r = run_analysis(d["text"], references=corpus_refs + others,
+                             model=model)
+        except ValueError as e:
+            results.append({"name": d["name"], "ok": False, "error": str(e)})
+            continue
+        # ¿con qué OTRO archivo del lote coincide más? (plagio cruzado)
+        other_names = {o["name"] for o in others}
+        cross = [m for m in r["plagiarism"]["matches"] if m["source"] in other_names]
+        results.append({
+            "name": d["name"],
+            "ok": True,
+            "words": r["meta"]["word_count"],
+            "ai_probability": r["scores"]["ai_probability"],
+            "plagiarism": r["scores"]["plagiarism"],
+            "originality": r["scores"]["originality"],
+            "confidence": r["confidence"]["level"],
+            "cross_match": cross[0] if cross else None,
+        })
+
+    failed = [{"name": d["name"], "ok": False, "error": d["error"]}
+              for d in docs if not d["ok"]]
+    return {"count": len(valid), "failed": len(failed),
+            "rows": results + failed}
 
 
 @app.post("/api/analyze/file")
@@ -242,7 +327,7 @@ def references_delete(ref_id: int) -> dict:
 
 @app.get("/api/model")
 def model_status() -> dict:
-    model = app.state.model
+    model = _current_model()
     return {
         "loaded": model is not None,
         "meta": getattr(model, "meta", None) if model else None,

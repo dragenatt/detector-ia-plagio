@@ -117,6 +117,19 @@ Cada oración recibe un puntaje de IA y de plagio. En la interfaz, las oraciones
 con marcas de IA se resaltan en **ámbar con intensidad proporcional** al puntaje
 (más marcado = más "parece IA"), y las que coinciden con una fuente, en azul.
 
+### Análisis por lotes (varios archivos)
+La pestaña **"Varios archivos"** permite subir muchos trabajos a la vez (p. ej.
+toda una clase) y ver una **tabla comparativa** (IA %, plagio, originalidad,
+confianza) con **exportación a CSV**. Además detecta **plagio cruzado**: compara
+cada trabajo contra los demás del lote para descubrir si se copiaron entre sí.
+Endpoint: `POST /api/analyze/batch`.
+
+### Robustez de la interfaz
+La app usa un **Error Boundary**: si algún dato inesperado provocara un fallo al
+dibujar un resultado, se muestra un mensaje con botón de reintento en vez de
+dejar la pantalla en blanco. El backend nunca depende de un estado sin
+inicializar (el modelo se lee de forma tolerante).
+
 ### Detección de plagio (`plagiarism.py`)
 - **Coincidencia textual (n-gramas de 5 palabras):** qué fracción del texto
   aparece en alguna fuente. Es la métrica principal de similitud y permite

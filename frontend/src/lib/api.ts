@@ -118,6 +118,22 @@ export interface ModelStatus {
   loaded: boolean;
   meta: Record<string, unknown> | null;
 }
+export interface BatchRow {
+  name: string;
+  ok: boolean;
+  error?: string | null;
+  words?: number;
+  ai_probability?: number;
+  plagiarism?: number;
+  originality?: number;
+  confidence?: string;
+  cross_match?: { source: string; overlap: number } | null;
+}
+export interface BatchResult {
+  count: number;
+  failed: number;
+  rows: BatchRow[];
+}
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, init);
@@ -150,6 +166,15 @@ export const api = {
     fd.append("file", file);
     return req<AnalysisResult>(
       `/api/analyze/file?use_model=${useModel}`,
+      { method: "POST", body: fd }
+    );
+  },
+
+  analyzeBatch: (files: File[], useModel = true) => {
+    const fd = new FormData();
+    for (const f of files) fd.append("files", f);
+    return req<BatchResult>(
+      `/api/analyze/batch?use_model=${useModel}`,
       { method: "POST", body: fd }
     );
   },

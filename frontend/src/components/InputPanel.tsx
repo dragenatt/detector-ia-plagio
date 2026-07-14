@@ -4,15 +4,20 @@ import { FileText, Upload, Loader2, ScanLine } from "lucide-react";
 interface Props {
   onAnalyzeText: (text: string) => void;
   onAnalyzeFile: (file: File) => void;
+  onAnalyzeBatch: (files: File[]) => void;
   loading: boolean;
 }
 
-export function InputPanel({ onAnalyzeText, onAnalyzeFile, loading }: Props) {
-  const [tab, setTab] = useState<"paste" | "upload">("paste");
+type Tab = "paste" | "upload" | "batch";
+
+export function InputPanel({ onAnalyzeText, onAnalyzeFile, onAnalyzeBatch, loading }: Props) {
+  const [tab, setTab] = useState<Tab>("paste");
   const [text, setText] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
   const fileRef = useRef<File | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [batchFiles, setBatchFiles] = useState<File[]>([]);
+  const batchRef = useRef<HTMLInputElement>(null);
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;
 
   const pickFile = (f: File | null) => {
@@ -21,7 +26,7 @@ export function InputPanel({ onAnalyzeText, onAnalyzeFile, loading }: Props) {
     setFileName(f.name);
   };
 
-  const tabBtn = (id: "paste" | "upload", label: string) => (
+  const tabBtn = (id: Tab, label: string) => (
     <button
       onClick={() => setTab(id)}
       className={`rounded-full px-4 py-1.5 font-medium transition ${
@@ -37,9 +42,44 @@ export function InputPanel({ onAnalyzeText, onAnalyzeFile, loading }: Props) {
       <div className="mb-4 inline-flex rounded-full border border-line bg-surface-2 p-1 text-sm">
         {tabBtn("paste", "Pegar texto")}
         {tabBtn("upload", "Subir archivo")}
+        {tabBtn("batch", "Varios archivos")}
       </div>
 
-      {tab === "paste" ? (
+      {tab === "batch" ? (
+        <>
+          <div
+            onClick={() => batchRef.current?.click()}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              setBatchFiles(Array.from(e.dataTransfer.files ?? []));
+            }}
+            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-line bg-paper px-6 py-10 text-center transition hover:border-accent"
+          >
+            <Upload size={26} className="text-accent" />
+            <p className="text-sm font-medium text-ink">
+              {batchFiles.length
+                ? `${batchFiles.length} archivo(s) seleccionados`
+                : "Arrastra varios archivos o haz clic para elegir"}
+            </p>
+            <p className="text-xs text-muted">
+              PDF, DOCX, TXT · para comparar toda una clase (máx. 60)
+            </p>
+            <input ref={batchRef} type="file" accept=".pdf,.docx,.txt,.md" multiple hidden
+              onChange={(e) => setBatchFiles(Array.from(e.target.files ?? []))} />
+          </div>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <span className="text-xs text-muted">
+              {batchFiles.length} archivo(s) · se detecta también copia entre ellos
+            </span>
+            <button className="btn-primary" disabled={loading || batchFiles.length < 2}
+              onClick={() => onAnalyzeBatch(batchFiles)}>
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
+              {loading ? "Analizando…" : "Analizar lote"}
+            </button>
+          </div>
+        </>
+      ) : tab === "paste" ? (
         <>
           <textarea
             value={text}
