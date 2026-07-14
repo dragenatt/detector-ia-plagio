@@ -1,0 +1,5 @@
+La bitácora de laboratorio de esta semana es un desastre y lo asumo. El lunes calibré mal la balanza y no me di cuenta hasta el miércoles, así que tres mediciones se fueron a la basura. Las repetí el jueves de madrugada porque era el único horario con el equipo libre. El técnico, don Raúl, me dejó la llave y me hizo prometer que apagaría todo. Cumplí, aunque casi me quedo dormido sobre el espectrofotómetro.
+
+Los resultados de la segunda tanda tienen más sentido. La curva de absorbancia se comporta como esperábamos hasta la concentración 0.4, y ahí se aplana de un modo que no había leído en ningún paper. Le mandé el gráfico a mi compañera de otro grupo y me respondió que a ella le pasó algo parecido con otro compuesto. Puede ser coincidencia o puede ser que el método tenga un límite que nadie reporta. Voy a insistir la semana que viene con concentraciones intermedias.
+
+Nota personal para el yo del futuro: revisar la calibración ANTES de empezar, no a mitad de camino. Y dormir. Un investigador con sueño rompe pipetas caras, lo comprobé empíricamente el martes. Fueron dos.

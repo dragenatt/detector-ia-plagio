@@ -57,12 +57,37 @@ def analyze(text: str, references: list[dict] | None = None,
     final_calibration = getattr(model, "final_calibration", None) if model else None
     ai_result = ai_detection.detect(feats, model_proba, model_weight, final_calibration)
 
-    # 3b. Análisis por oración (ventanas): puntaje local de IA con el modelo,
-    #     y corrección del % global si el documento es heterogéneo (mixto).
+    # 3b. Análisis por oración (ventanas): puntaje local de IA con el modelo.
     sent_scores = ai_detection.sentence_scores(text, model)
+
+    # 3c. Textos LARGOS: el análisis global se diluye (una sección de IA
+    #     desaparece del promedio). Se mezcla con la media por bloques.
+    if feats["_word_count"] >= ai_detection.LONG_TEXT_WORDS:
+        blocks = ai_detection.block_estimate(text, model)
+        if blocks and blocks["n_blocks"] >= 3:
+            p = ai_result["probability"] / 100.0
+            blended = 0.45 * p + 0.55 * blocks["mean"]
+            ai_result["probability"] = round(
+                min(max(blended, 0.03), 0.97) * 100)
+            ai_result["blocks"] = {
+                "mean": round(blocks["mean"], 3),
+                "coverage": round(blocks["coverage"], 3),
+                "n_blocks": blocks["n_blocks"],
+            }
+
+    # 3d. Corrección por heterogeneidad (documento mixto: mitad IA, mitad no).
     ai_result["probability"], mixed_info = ai_detection.adjust_for_heterogeneity(
         ai_result["probability"], sent_scores)
     ai_result["mixed"] = mixed_info
+
+    # 3e. Regiones contiguas con estilo de IA (la ZONA completa, no cachitos).
+    regions = ai_detection.detect_regions(text, sent_scores)
+    region_words = sum(r["words"] for r in regions)
+    ai_result["regions"] = regions
+    ai_result["regions_summary"] = {
+        "count": len(regions),
+        "coverage": round(region_words / max(feats["_word_count"], 1), 3),
+    }
 
     # 4. Detección de plagio.
     plag = plagiarism_mod.analyze(text, references)
@@ -77,10 +102,10 @@ def analyze(text: str, references: list[dict] | None = None,
         probability=ai_result["probability"],
         heterogeneity=mixed_info["heterogeneity"])
 
-    # 6. Resaltado por oración (heurística local + modelo por ventana).
+    # 6. Resaltado por oración (heurística local + modelo + regiones).
     segments = highlighting.build_segments(
         text, feats["avg_sentence_len"], plag["flagged_sentences"],
-        sentence_ai=sent_scores)
+        sentence_ai=sent_scores, ai_regions=regions)
 
     # 7. Explicaciones y recomendaciones.
     explanation = explain.build(feats, ai_result, plag, orig)

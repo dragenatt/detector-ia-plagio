@@ -42,6 +42,14 @@ def build(features: dict, ai_result: dict, plagiarism: dict,
         if s["severity"] in ("media", "alta"):
             ai_signals.append(f"{s['label']}: {s['description']}")
 
+    # Zonas contiguas con estilo de IA (dónde se concentra, no solo cuánto).
+    rs = ai_result.get("regions_summary") or {}
+    if rs.get("count"):
+        pct = round(rs.get("coverage", 0) * 100)
+        ai_signals.append(
+            f"El estilo de IA se concentra en {rs['count']} zona(s) contigua(s) "
+            f"que cubren aproximadamente el {pct}% del texto (resaltadas en ámbar).")
+
     # Señales humanas (lo contrario de algunas señales de IA).
     if features["personal_voice_density"] >= 1.5:
         human_signals.append("Hay presencia clara de voz personal u opinión.")

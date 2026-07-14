@@ -277,32 +277,179 @@ def ai_sentence_fraction(scores: list[dict]) -> float | None:
     return num / den if den else None
 
 
+# --------------------------------------------------------------------------- #
+# Regiones contiguas con estilo de IA (no "cachitos")
+# --------------------------------------------------------------------------- #
+# La IA no se usa en oraciones sueltas: se usa en BLOQUES (un párrafo, una
+# sección). Suavizamos los puntajes por oración y aplicamos histéresis: una
+# región se ABRE donde el puntaje suavizado es alto y se EXPANDE hacia las
+# oraciones vecinas dudosas, marcando la zona completa.
+
+REGION_ENTER = 0.50    # umbral (suavizado) para abrir una región
+REGION_EXTEND = 0.35   # umbral para expandir la región a vecinas dudosas
+
+
+def _smoothed_scores(scores: list[dict]) -> list[float | None]:
+    """Media móvil (ventana 3) de los puntajes por oración; None se ignora."""
+    vals = [s["score"] for s in scores]
+    out: list[float | None] = []
+    for i in range(len(vals)):
+        window = [v for v in vals[max(0, i - 1):i + 2] if v is not None]
+        out.append(sum(window) / len(window) if window else None)
+    return out
+
+
+def detect_regions(text: str, sent_scores: list[dict]) -> list[dict]:
+    """Zonas contiguas del documento con estilo de IA, con offsets absolutos.
+
+    Devuelve [{first_sentence, last_sentence, sentences, start, end, score,
+    words}], donde score es el puntaje medio de la zona.
+    """
+    sents = tu.split_sentences(text)
+    if len(sents) != len(sent_scores):
+        return []
+    sm = _smoothed_scores(sent_scores)
+    n = len(sm)
+    marked = [False] * n
+    for i, v in enumerate(sm):
+        if v is None or v < REGION_ENTER:
+            continue
+        marked[i] = True
+        j = i - 1
+        while j >= 0 and sm[j] is not None and sm[j] >= REGION_EXTEND:
+            marked[j] = True
+            j -= 1
+        j = i + 1
+        while j < n and sm[j] is not None and sm[j] >= REGION_EXTEND:
+            marked[j] = True
+            j += 1
+
+    regions: list[dict] = []
+    i = 0
+    while i < n:
+        if not marked[i]:
+            i += 1
+            continue
+        j = i
+        while j + 1 < n and marked[j + 1]:
+            j += 1
+        idxs = list(range(i, j + 1))
+        svals = [sent_scores[k]["score"] for k in idxs
+                 if sent_scores[k]["score"] is not None]
+        score = sum(svals) / len(svals) if svals else 0.0
+        # Una oración suelta solo cuenta como región si es muy clara.
+        if len(idxs) >= 2 or score >= 0.70:
+            regions.append({
+                "first_sentence": i,
+                "last_sentence": j,
+                "sentences": idxs,
+                "start": sents[i]["start"],
+                "end": sents[j]["end"],
+                "score": round(score, 3),
+                "words": sum(sent_scores[k]["words"] for k in idxs),
+            })
+        i = j + 1
+    return regions
+
+
+# --------------------------------------------------------------------------- #
+# Estimación por bloques (textos largos)
+# --------------------------------------------------------------------------- #
+# En un documento largo, los rasgos globales se DILUYEN: una sección de IA
+# dentro de un texto humano desaparece del promedio. Puntuar por bloques
+# (párrafos agrupados) y combinar evita esa dilución en ambos sentidos.
+
+BLOCK_MIN_WORDS = 50
+LONG_TEXT_WORDS = 300  # a partir de aquí el % global se mezcla con los bloques
+
+
+def block_estimate(text: str, model=None) -> dict | None:
+    """Puntúa el documento por bloques y devuelve la media ponderada por
+    palabras, la cobertura de bloques tipo IA y el número de bloques."""
+    from . import features as features_mod  # import local para evitar ciclos
+
+    paras = tu.paragraphs(text)
+    blocks: list[str] = []
+    buf = ""
+    for p in paras:
+        buf = (buf + "\n\n" + p).strip() if buf else p
+        if len(tu.words(buf)) >= BLOCK_MIN_WORDS:
+            blocks.append(buf)
+            buf = ""
+    if buf:
+        if blocks and len(tu.words(buf)) < BLOCK_MIN_WORDS // 2:
+            blocks[-1] += "\n\n" + buf
+        else:
+            blocks.append(buf)
+    if len(blocks) < 2:
+        return None
+
+    scored: list[tuple[float, int]] = []
+    model_failed = False
+    for b in blocks:
+        w = len(tu.words(b))
+        if w == 0:
+            continue
+        feats = features_mod.extract(b)
+        h = heuristic_probability(feats)
+        mp = None
+        if model is not None and not model_failed:
+            try:
+                mp = float(model.predict_proba_one(features_mod.to_vector(feats)))
+            except Exception:
+                model_failed = True
+                mp = None
+        scored.append((combine(h, mp), w))
+    if not scored:
+        return None
+    total = sum(w for _, w in scored)
+    return {
+        "mean": sum(p * w for p, w in scored) / total,
+        "coverage": sum(w for p, w in scored if p >= 0.5) / total,
+        "n_blocks": len(scored),
+    }
+
+
 MIN_SCORED_SENTENCES = 4  # mínimo de oraciones puntuadas para fiarse del mix
 
 
 def adjust_for_heterogeneity(probability: int, scores: list[dict]) -> tuple[int, dict]:
-    """Corrige el % global cuando el documento es HETEROGÉNEO (mitad IA,
-    mitad humano). El análisis global promedia rasgos y cae en un extremo;
-    la fracción de oraciones tipo IA es la estimación correcta en ese caso.
+    """Corrige el % global cuando el documento es REALMENTE mixto: partes
+    claramente de IA conviviendo con partes claramente humanas.
 
-    heterogeneity = 4·f·(1−f): 0 en textos puros, 1 cuando f=0.5. Solo se
-    ajusta si supera 0.5 (mezcla real), tirando el % hacia la fracción.
+    Clave: exigir BIMODALIDAD, no solo una fracción intermedia. Un texto
+    uniformemente "gris" (p. ej. IA humanizada, todas sus oraciones a media
+    tabla) NO es mixto y no debe ajustarse — antes se penalizaba por error.
+    Solo si hay peso sustancial de oraciones claramente-IA (>=0.6) Y de
+    oraciones claramente-humanas (<=0.35) tiramos el % hacia la fracción.
     """
-    frac = ai_sentence_fraction(scores)
+    info = {"ai_sentence_fraction": None, "heterogeneity": 0.0, "adjusted": False}
+
+    hi = lo = total = 0.0
+    for s in scores:
+        if s["score"] is None:
+            continue
+        w = s["words"] * (0.5 + 0.5 * s["confidence"])
+        if w <= 0:
+            continue
+        total += w
+        if s["score"] >= 0.60:
+            hi += w
+        elif s["score"] <= 0.35:
+            lo += w
     scored = sum(1 for s in scores if s["score"] is not None)
-    info = {
-        "ai_sentence_fraction": None if frac is None else round(frac, 3),
-        "heterogeneity": 0.0,
-        "adjusted": False,
-    }
-    if frac is None or scored < MIN_SCORED_SENTENCES:
+    if total <= 0 or scored < MIN_SCORED_SENTENCES:
         return probability, info
-    het = 4.0 * frac * (1.0 - frac)
+
+    frac = ai_sentence_fraction(scores)
+    info["ai_sentence_fraction"] = None if frac is None else round(frac, 3)
+    p_hi, p_lo = hi / total, lo / total
+    # Bimodalidad: cuánto hay del bando minoritario (0 si todo es de un tipo o
+    # todo es "gris"). Escalada a [0,1].
+    het = min(p_hi, p_lo) * 2.0
     info["heterogeneity"] = round(het, 3)
-    if het <= 0.5:
-        return probability, info
-    # Cuanto más mezclado, más manda la fracción por oraciones (tope 0.85
-    # para no descartar del todo la vista global).
+    if het < 0.35 or frac is None:
+        return probability, info  # uniforme: confiamos en el análisis global
     pull = min(het, 0.85)
     p = (1 - pull) * (probability / 100.0) + pull * frac
     info["adjusted"] = True

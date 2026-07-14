@@ -86,9 +86,17 @@ existe). Se recorta a `[3 %, 97 %]` para no afirmar nunca certezas absolutas.
 > difíciles**: IA "humanizada", humano académico formal y textos mixtos.
 >
 > **Documentos mixtos:** el texto se analiza también **por oración** (ventanas
-> con el modelo). Si el documento es heterogéneo (mitad IA, mitad humano), el
-> % global se corrige hacia la **fracción de oraciones tipo IA** en vez de caer
-> en un extremo — un texto mitad y mitad ronda el 50 %, no el 90 % ni el 10 %.
+> con el modelo). Si el documento es heterogéneo (partes claramente de IA junto
+> a partes claramente humanas — detectado por **bimodalidad**, no por una simple
+> fracción media), el % global se corrige hacia la **fracción de oraciones tipo
+> IA** en vez de caer en un extremo.
+>
+> **Textos largos y zonas de IA:** en documentos largos el análisis global se
+> **diluye** (una sección de IA dentro de un texto humano desaparece del
+> promedio). Para evitarlo, el texto se puntúa también **por bloques** y se
+> detectan **regiones contiguas** con estilo de IA (suavizado + histéresis):
+> se marca y expande la **zona completa** donde se usó IA, no oraciones sueltas,
+> y se reporta qué porcentaje del texto cubren esas zonas.
 >
 > **Confianza honesta:** el nivel (baja/media/alta) combina longitud del texto,
 > acuerdo heurística-modelo, distancia a la zona gris y heterogeneidad, y se

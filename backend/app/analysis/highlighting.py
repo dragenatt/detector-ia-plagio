@@ -122,12 +122,19 @@ def _sentence_ai_cue(sentence: str, avg_len: float) -> tuple[float, list[str]]:
 def build_segments(text: str, avg_sentence_len: float,
                    flagged_sentences: list[dict],
                    ai_cue_threshold: float = 0.6,
-                   sentence_ai: list[dict] | None = None) -> list[dict]:
+                   sentence_ai: list[dict] | None = None,
+                   ai_regions: list[dict] | None = None) -> list[dict]:
     """`sentence_ai`: puntajes por ventana de ai_detection.sentence_scores().
     Si están disponibles, se mezclan con la pista local (ponderados por la
-    confianza de la ventana) para que el ámbar también use lo aprendido."""
+    confianza de la ventana) para que el ámbar también use lo aprendido.
+    `ai_regions`: zonas contiguas con estilo de IA; toda oración dentro de una
+    región se marca (la zona completa, no oraciones sueltas)."""
     flagged_by_index = {f["index"]: f for f in flagged_sentences}
     window_by_index = {s["index"]: s for s in (sentence_ai or [])}
+    region_by_index: dict[int, dict] = {}
+    for reg in (ai_regions or []):
+        for k in reg["sentences"]:
+            region_by_index[k] = reg
     segments = []
     for i, sent in enumerate(tu.split_sentences(text)):
         plag = flagged_by_index.get(i)
@@ -141,7 +148,14 @@ def build_segments(text: str, avg_sentence_len: float,
             if win["score"] >= 0.6:
                 ai_reasons.append(
                     f"el modelo puntúa alto su entorno ({round(win['score'] * 100)}%)")
-        is_ai = ai_score >= threshold
+        region = region_by_index.get(i)
+        if region:
+            # Dentro de una zona de IA: se marca la región COMPLETA.
+            ai_score = max(ai_score, region["score"])
+            ai_reasons.append(
+                "está dentro de una zona contigua con estilo de IA "
+                f"({round(region['score'] * 100)}% de la zona)")
+        is_ai = region is not None or ai_score >= threshold
         is_plag = plag is not None
 
         if is_plag and is_ai:
