@@ -104,7 +104,10 @@ def _analyze_text(text: str, req: AnalyzeRequest) -> dict:
                               model=model, model_weight=req.model_weight)
     except ValueError as e:
         raise HTTPException(400, str(e))
-    analysis_id = db.save_analysis(result, text, req.title) if req.save else None
+    # Guarda el texto normalizado (el que el motor analizó) para que el
+    # resaltado cuadre al reabrir el análisis desde el historial.
+    saved_text = result.get("analyzed_text", text)
+    analysis_id = db.save_analysis(result, saved_text, req.title) if req.save else None
     return {"id": analysis_id, **result}
 
 

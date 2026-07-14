@@ -133,6 +133,29 @@ _TOKEN_RE = re.compile(r"\w+", re.UNICODE)
 _SENT_RE = re.compile(r"[^.!?…\n]+[.!?…]*[\n]*", re.UNICODE)
 
 
+def normalize_text(text: str) -> str:
+    """Normaliza saltos de línea para que la segmentación en oraciones no se
+    fragmente cuando el texto viene con renglones "duros" (copiado de PDF/Word).
+
+    - CRLF/CR -> LF.
+    - Une los saltos de línea SIMPLES dentro de un párrafo (son cortes de línea,
+      no de oración) en espacios.
+    - Conserva los saltos DOBLES como separación real de párrafos.
+    Es idempotente: aplicarlo dos veces da el mismo resultado.
+    """
+    if not text:
+        return text or ""
+    t = text.replace("\r\n", "\n").replace("\r", "\n")
+    paras = re.split(r"\n[ \t]*\n+", t)          # 2+ saltos = párrafo nuevo
+    out = []
+    for p in paras:
+        joined = re.sub(r"[ \t]*\n[ \t]*", " ", p)   # salto simple -> espacio
+        joined = re.sub(r"[ \t]{2,}", " ", joined).strip()
+        if joined:
+            out.append(joined)
+    return "\n\n".join(out)
+
+
 def strip_accents(text: str) -> str:
     """Quita tildes (útil para comparar n-gramas de forma robusta)."""
     nfkd = unicodedata.normalize("NFKD", text)

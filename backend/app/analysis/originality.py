@@ -1,13 +1,13 @@
 """Índice de originalidad: combina plagio + IA en un único número.
 
-Definición (transparente y documentada para el usuario):
+Definición (transparente e intuitiva para el usuario):
 
-  originalidad = (1 - similitud)  *  (1 - 0.7 * prob_IA)   * 100
+  originalidad = (1 - similitud) * (1 - prob_IA) * 100
 
-- La similitud (copia) penaliza de forma directa: si copiaste mucho, hay poca
-  originalidad de autoría.
-- La probabilidad de IA penaliza de forma más suave (factor 0.7) porque es una
-  estimación menos certera y no equivale a "copiar".
+Se lee como "cuánto del texto es originalmente tuyo": lo que NO está copiado y
+NO parece generado por IA. Si no hay plagio, la originalidad es simplemente
+100 - IA (p. ej. IA 32 % -> originalidad 68 %), que es lo que la gente espera.
+El plagio penaliza de forma multiplicativa (copiar todo -> 0 originalidad).
 
 El resultado se recorta a [1, 99] para no transmitir certezas absolutas.
 """
@@ -19,7 +19,7 @@ from . import text_utils as tu
 def compute(similarity: int, ai_probability: int) -> int:
     sim = tu.clamp(similarity / 100.0, 0.0, 1.0)
     ai = tu.clamp(ai_probability / 100.0, 0.0, 1.0)
-    originality = (1.0 - sim) * (1.0 - 0.7 * ai) * 100.0
+    originality = (1.0 - sim) * (1.0 - ai) * 100.0
     return round(tu.clamp(originality, 1.0, 99.0))
 
 

@@ -38,7 +38,7 @@ export default function App() {
     setLoading(true); setError(null);
     try {
       const r = await api.analyzeText(text);
-      setBatch(null); setResult(r); setAnalyzedText(text); refresh();
+      setBatch(null); setResult(r); setAnalyzedText(r.analyzed_text ?? text); refresh();
     } catch (e) { setError((e as Error).message); }
     finally { setLoading(false); }
   };
@@ -47,7 +47,8 @@ export default function App() {
     setLoading(true); setError(null);
     try {
       const r = await api.analyzeFile(file);
-      setBatch(null); setResult(r); setAnalyzedText(r.extracted_text ?? ""); refresh();
+      setBatch(null); setResult(r);
+      setAnalyzedText(r.analyzed_text ?? r.extracted_text ?? ""); refresh();
     } catch (e) { setError((e as Error).message); }
     finally { setLoading(false); }
   };

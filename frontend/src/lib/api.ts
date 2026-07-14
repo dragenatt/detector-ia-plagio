@@ -93,6 +93,7 @@ export interface Meta {
 }
 export interface AnalysisResult {
   id: number | null;
+  analyzed_text?: string;
   scores: Scores;
   confidence: Confidence;
   ai_detection: AiDetection;

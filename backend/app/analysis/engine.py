@@ -32,7 +32,10 @@ def analyze(text: str, references: list[dict] | None = None,
     model      : clasificador entrenado con .predict_proba_one(vector) (opcional).
     model_weight: peso del modelo frente a las heurísticas (0..1).
     """
-    text = (text or "").strip()
+    # Normaliza saltos de línea "duros" (PDF/Word) para que las oraciones no se
+    # fragmenten. Se analiza y se devuelve ESTE texto, así el resaltado cuadra.
+    from . import text_utils as tu
+    text = tu.normalize_text((text or "").strip())
     if not text:
         raise ValueError("El texto está vacío.")
 
@@ -112,6 +115,7 @@ def analyze(text: str, references: list[dict] | None = None,
     recs = recommendations.build(feats, ai_result, plag)
 
     return {
+        "analyzed_text": text,   # texto normalizado sobre el que cuadran los offsets
         "scores": {
             "originality": orig,
             "plagiarism": plag["similarity"],
