@@ -22,8 +22,8 @@ def main() -> None:
                         help="Carpeta con el corpus etiquetado.")
     parser.add_argument("--out", default=str(MODEL_PATH),
                         help="Ruta de salida del modelo (JSON).")
-    parser.add_argument("--epochs", type=int, default=800)
-    parser.add_argument("--lr", type=float, default=0.1)
+    parser.add_argument("--epochs", type=int, default=600)
+    parser.add_argument("--lr", type=float, default=0.05)
     args = parser.parse_args()
 
     print("Entrenando con el corpus en:", args.data)

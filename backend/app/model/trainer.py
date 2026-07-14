@@ -199,7 +199,7 @@ def cross_validate(X: list, y: list, k: int = 5, lr: float = 0.1,
 
 
 def train(training_dir: str | Path, model_out: str | Path,
-          epochs: int = 1000, lr: float = 0.1, l2: float = 0.01,
+          epochs: int = 600, lr: float = 0.05, l2: float = 0.01,
           class_weight: str | None = "balanced") -> dict:
     X, y, counts, feats_list = load_dataset(training_dir)
     n_human = sum(1 for v in y if v == 0)
