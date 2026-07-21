@@ -99,7 +99,7 @@ def run() -> None:
     print(f"  Precisión:  {round(precision, 3)}   (de lo marcado como IA, cuánto acierta)")
     print(f"  Recall:     {round(recall, 3)}   (de toda la IA, cuánta detecta)")
     print(f"  F1:         {round(f1, 3)}")
-    print(f"\n--- Calibración (¿el % significa lo que dice?) ---")
+    print("\n--- Calibración (¿el % significa lo que dice?) ---")
     print(f"  Brier: {cal['brier']}   ECE: {cal['ece']}   (más bajo = mejor)")
 
     # Textos mixtos (IA editada por humano): deben caer en la banda media,

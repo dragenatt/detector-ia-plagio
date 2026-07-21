@@ -104,6 +104,43 @@ def test_originality_is_intuitive():
     assert compute(50, 40) == 30  # (1-0.5)*(1-0.4)=0.30
 
 
+def test_deterministic():
+    """El mismo texto debe dar EXACTAMENTE el mismo resultado cada vez."""
+    text = ("En la actualidad, cabe destacar que la tecnología es fundamental. "
+            "Además, resulta evidente su importancia. Ayer pesqué con mi tío.")
+    a = analyze(text)
+    b = analyze(text)
+    for key in ("originality", "plagiarism", "ai_probability"):
+        assert a["scores"][key] == b["scores"][key], f"{key} no es determinista."
+    assert a["confidence"]["level"] == b["confidence"]["level"]
+    assert len(a["segments"]) == len(b["segments"])
+
+
+def test_scores_are_coherent():
+    """Los tres porcentajes siempre en [0,100] y sin contradicciones."""
+    samples = [
+        "hola",
+        "😀 " * 20,
+        "En la actualidad, cabe destacar que resulta evidente. " * 5,
+        "Ayer fui a pescar con mi tío y la pasamos genial, comimos rico. " * 4,
+    ]
+    for t in samples:
+        s = analyze(t)["scores"]
+        for k in ("originality", "plagiarism", "ai_probability"):
+            assert 0 <= s[k] <= 100, f"{k}={s[k]} fuera de [0,100] en {t[:30]!r}"
+        # Sin corpus, el plagio es 0; la originalidad no puede superar 100-... :
+        # se comprueba solo el rango y que no sea NaN/None.
+        assert isinstance(s["originality"], int)
+
+
+def test_giant_paragraph_no_periods():
+    """Un solo párrafo enorme sin puntos no debe romper ni colgar."""
+    text = "palabra " * 800  # 800 palabras, un solo "período"
+    r = analyze(text)
+    assert 0 <= r["scores"]["ai_probability"] <= 100
+    assert _roundtrip(r["analyzed_text"], r["segments"])
+
+
 def test_long_text_performance():
     base = ("Recuerdo aquel verano en el pueblo, cuando mi abuela cocinaba y "
             "el aire olía a leña. Aprendí a pescar con una caña vieja. ")
@@ -129,6 +166,12 @@ if __name__ == "__main__":
     print("[OK] saltos de línea duros no cambian el resultado ni fragmentan")
     test_originality_is_intuitive()
     print("[OK] originalidad intuitiva (100 - IA sin plagio)")
+    test_deterministic()
+    print("[OK] resultado determinista (mismo texto -> mismo resultado)")
+    test_scores_are_coherent()
+    print("[OK] porcentajes coherentes (0-100, sin contradicciones)")
+    test_giant_paragraph_no_periods()
+    print("[OK] párrafo gigante sin puntos no rompe")
     test_long_text_performance()
     print("[OK] 10k palabras en tiempo razonable")
     print("\nTODAS LAS PRUEBAS DE CASOS LIMITE PASARON [OK]")

@@ -75,7 +75,6 @@ class LogisticRegression:
         d = len(Xs[0])
         self.weights = [0.0] * d
         self.bias = 0.0
-        n = len(Xs)
         w0, w1 = self._class_weights(y, class_weight)
         wsum = sum(w1 if yi == 1 else w0 for yi in y) or 1.0
 

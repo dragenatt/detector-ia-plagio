@@ -68,9 +68,8 @@ def test_health_ok_without_lifespan():
 
 
 if __name__ == "__main__":
-    try:
-        import fastapi  # noqa: F401
-    except ImportError:
+    import importlib.util
+    if importlib.util.find_spec("fastapi") is None:
         print("SKIP: FastAPI no instalado en este entorno.")
         sys.exit(0)
     test_batch_and_cross_plagiarism()

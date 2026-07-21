@@ -15,11 +15,9 @@ Salida: models/ai_model.json con pesos, escalador y metadatos.
 from __future__ import annotations
 
 import glob
-import os
-from pathlib import Path
-
 import math
 import random
+from pathlib import Path
 
 from ..analysis import ai_detection
 from ..analysis import features as features_mod
