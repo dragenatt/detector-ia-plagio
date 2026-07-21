@@ -34,7 +34,7 @@ if not defined PY (
 if not defined PY (
     echo [ERROR] No se encontro Python. Instala Python 3.8 o superior desde
     echo         https://www.python.org/downloads/ y marca "Add to PATH".
-    echo         (Windows 8 o Windows 10 antiguo: usa Python 3.8.10, que si los soporta).
+    echo         Windows 8 o Windows 10 antiguo: usa Python 3.8.10, que si los soporta.
     pause
     exit /b 1
 )
@@ -65,7 +65,7 @@ if errorlevel 1 (
 
 REM --- 3. Instalar dependencias (solo la primera vez) -----------------
 if not exist ".venv\.deps_ok" (
-    echo [2/3] Instalando dependencias (puede tardar un momento)...
+    echo [2/3] Instalando dependencias - puede tardar un momento...
     "%VENV_PY%" -m pip install --upgrade pip >nul
     "%VENV_PY%" -m pip install -r requirements.txt
     if errorlevel 1 (
@@ -105,7 +105,7 @@ if not exist "..\frontend\dist\index.html" (
         echo         La API funcionara, pero la pagina web no estara disponible.
         echo         Instala Node 18+ desde https://nodejs.org y vuelve a ejecutar.
     ) else (
-        echo [3/3] Compilando la interfaz (solo la primera vez)...
+        echo [3/3] Compilando la interfaz - solo la primera vez...
         pushd ..\frontend
         call npm install
         call npm run build
@@ -115,7 +115,7 @@ if not exist "..\frontend\dist\index.html" (
 
 REM --- 4b. Entrenar el detector la primera vez (si no hay modelo) ----
 if not exist "models\ai_model.json" (
-    echo [*] Entrenando el detector con el corpus incluido (solo la primera vez)...
+    echo [*] Entrenando el detector con el corpus incluido - solo la primera vez...
     "%VENV_PY%" train.py
     if errorlevel 1 (
         echo [AVISO] No se pudo entrenar; Veraz usara solo heuristicas.
