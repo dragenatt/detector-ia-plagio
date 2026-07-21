@@ -6,7 +6,18 @@ REM  primera vez (entorno virtual, dependencias e interfaz) y abre el
 REM  navegador en http://127.0.0.1:8000
 REM ====================================================================
 setlocal enabledelayedexpansion
+
+REM Al hacer doble clic, Windows ejecuta los .bat en una ventana que puede
+REM cerrarse al terminar. Relanzamos una vez con cmd /k para que cualquier
+REM error quede visible y el usuario pueda copiarlo.
+if /i not "%~1"=="--inner" (
+    start "Veraz" cmd /k ""%~f0" --inner"
+    exit /b
+)
+
 cd /d "%~dp0"
+set "VERAZ_LOG=%~dp0veraz-arranque.log"
+echo [%date% %time%] Iniciando Veraz > "%VERAZ_LOG%"
 
 echo.
 echo  ========================================
@@ -120,6 +131,7 @@ start "" http://127.0.0.1:8000
 "%VENV_PY%" run.py
 
 echo.
-echo El servidor se detuvo. Pulsa una tecla para cerrar esta ventana.
-pause >nul
+echo El servidor se detuvo. Esta ventana queda abierta para mostrar errores.
+echo Log guardado en: "%VERAZ_LOG%"
+echo Si necesitas cerrar, escribe exit y pulsa Enter.
 endlocal
