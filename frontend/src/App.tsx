@@ -112,6 +112,15 @@ export default function App() {
                 className="space-y-6"
               >
                 <ErrorBoundary onReset={() => setResult(null)}>
+                  {result.extraction?.pages_total != null && (
+                    <div className={`rounded-xl border p-3 text-sm ${
+                      result.extraction.partial || result.extraction.scanned
+                        ? "border-ai/40 bg-ai/10 text-ink"
+                        : "border-good/40 bg-good/10 text-ink"}`}>
+                      📄 {result.extraction.note ??
+                        `Se leyeron ${result.extraction.pages_with_text} de ${result.extraction.pages_total} páginas · ${result.extraction.words} palabras.`}
+                    </div>
+                  )}
                   <ScorePanel r={result} />
 
                   {result.id != null && (

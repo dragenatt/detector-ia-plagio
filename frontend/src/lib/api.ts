@@ -91,9 +91,18 @@ export interface Meta {
   model_used: boolean;
   analyzed_at: string;
 }
+export interface Extraction {
+  words: number;
+  pages_total: number | null;
+  pages_with_text: number | null;
+  scanned: boolean | null;
+  partial: boolean;
+  note: string | null;
+}
 export interface AnalysisResult {
   id: number | null;
   analyzed_text?: string;
+  extraction?: Extraction;
   scores: Scores;
   confidence: Confidence;
   ai_detection: AiDetection;
@@ -129,6 +138,7 @@ export interface BatchRow {
   originality?: number;
   confidence?: string;
   cross_match?: { source: string; overlap: number } | null;
+  warning?: string | null;
 }
 export interface BatchResult {
   count: number;

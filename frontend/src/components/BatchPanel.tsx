@@ -77,6 +77,9 @@ export function BatchPanel({ res }: { res: BatchResult }) {
                   ) : (
                     <span className="text-muted">—</span>
                   )}
+                  {r.warning && (
+                    <span className="ml-1 text-ai" title={r.warning}>⚠</span>
+                  )}
                 </td>
               </tr>
             ))}

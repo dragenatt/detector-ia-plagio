@@ -155,18 +155,21 @@ async def analyze_batch_endpoint(files: List[UploadFile] = File(...),
             docs.append(row)
             continue
         try:
-            text = extract.extract_text(name, data)
+            info = extract.extract_detailed(name, data)
         except Exception as e:
             logger.warning("Lote: fallo al leer %r: %s", name, e, exc_info=True)
             row["error"] = f"No se pudo leer: {e}"
             docs.append(row)
             continue
-        if not (text or "").strip():
-            row["error"] = "Sin texto extraíble."
+        text = info["text"]
+        if not text.strip():
+            row["error"] = ("PDF escaneado (sin texto)" if info.get("scanned")
+                            else "Sin texto extraíble.")
             docs.append(row)
             continue
         row["ok"] = True
         row["text"] = text
+        row["extraction_warning"] = info["note"] if info.get("partial") else None
         docs.append(row)
 
     valid = [d for d in docs if d["ok"]]
@@ -197,6 +200,7 @@ async def analyze_batch_endpoint(files: List[UploadFile] = File(...),
             "originality": r["scores"]["originality"],
             "confidence": r["confidence"]["level"],
             "cross_match": cross[0] if cross else None,
+            "warning": d.get("extraction_warning"),
         })
 
     failed = [{"name": d["name"], "ok": False, "error": d["error"]}
@@ -216,18 +220,25 @@ async def analyze_file_endpoint(file: UploadFile = File(...),
     if len(data) > config.MAX_UPLOAD_BYTES:
         raise HTTPException(413, "El archivo supera el límite de 5 MB.")
     try:
-        text = extract.extract_text(file.filename, data)
+        info = extract.extract_detailed(file.filename, data)
     except Exception as e:
         logger.warning("Fallo al extraer texto de %r (%d bytes): %s",
                        file.filename, len(data), e, exc_info=True)
         raise HTTPException(422, f"No se pudo leer el archivo: {e}")
-    if not (text or "").strip():
-        raise HTTPException(422, ("El archivo no contiene texto extraíble "
-                                  "(¿es un PDF escaneado o un archivo vacío?)."))
+    text = info["text"]
+    if not text.strip():
+        # Escaneado / vacío: mensaje claro según el diagnóstico.
+        raise HTTPException(422, info.get("note") or (
+            "El archivo no contiene texto extraíble "
+            "(¿es un PDF escaneado o un archivo vacío?)."))
     req = AnalyzeRequest(text=text, title=file.filename,
                          use_model=use_model, save=save)
     result = _analyze_text(text, req)
     result["extracted_text"] = text
+    # Diagnóstico de extracción para que la UI avise si quedó incompleto.
+    result["extraction"] = {k: info[k] for k in
+                            ("words", "pages_total", "pages_with_text",
+                             "scanned", "partial", "note")}
     return result
 
 

@@ -124,6 +124,19 @@ confianza) con **exportación a CSV**. Además detecta **plagio cruzado**: compa
 cada trabajo contra los demás del lote para descubrir si se copiaron entre sí.
 Endpoint: `POST /api/analyze/batch`.
 
+### Extracción de archivos robusta (`extract.py`)
+Al subir un PDF/DOCX se extrae el documento **completo**, no fragmentos:
+- **Tolerante por página**: si una página del PDF falla, se salta y se
+  continúa con las demás (antes, una sola página problemática abortaba todo
+  el documento y solo se leían "cachitos").
+- **Diagnóstico**: se informa cuántas páginas se leyeron del total y cuántas
+  palabras ("Se leyeron 8 de 8 páginas · 2.340 palabras"), visible al subir.
+- **PDF escaneado**: si no hay texto seleccionable (imágenes), se avisa
+  claramente en vez de devolver texto vacío o incompleto.
+- **Extracción parcial**: si el texto es sospechosamente corto para el número
+  de páginas, se advierte que pudo quedar incompleta.
+- Los **DOCX** incluyen también el texto de las tablas.
+
 ### Robustez de la interfaz
 La app usa un **Error Boundary**: si algún dato inesperado provocara un fallo al
 dibujar un resultado, se muestra un mensaje con botón de reintento en vez de
