@@ -24,12 +24,23 @@ export interface Signal {
   severity: Severity;
   description: string;
 }
+export interface AiRegion {
+  first_sentence: number;
+  last_sentence: number;
+  sentences: number[];
+  start: number;
+  end: number;
+  score: number;
+  words: number;
+}
 export interface AiDetection {
   probability: number;
   heuristic_probability: number;
   model_probability: number | null;
   used_model: boolean;
   signals: Signal[];
+  regions?: AiRegion[];
+  regions_summary?: { count: number; coverage: number };
 }
 export interface PlagMatch {
   source: string;
@@ -128,6 +139,20 @@ export interface ModelStatus {
   loaded: boolean;
   meta: Record<string, unknown> | null;
 }
+export interface CorpusCounts {
+  by_label: Record<string, { total: number; user: number }>;
+  human_axis: number;
+  ai_axis: number;
+  balanced: number;
+}
+export interface TrainReport {
+  trained: boolean;
+  message: string;
+  n_human?: number;
+  n_ai?: number;
+  cross_validation?: { f1_mean: number; f1_std: number; f1_folds: number[]; accuracy: number };
+  calibration_after?: { ece: number | null; brier: number | null };
+}
 export interface BatchRow {
   name: string;
   ok: boolean;
@@ -202,7 +227,23 @@ export const api = {
   reportUrl: (id: number) => `${BASE}/api/report/${id}`,
 
   modelStatus: () => req<ModelStatus>("/api/model"),
-  train: () => req<Record<string, unknown>>("/api/train", { method: "POST" }),
+  train: () => req<TrainReport>("/api/train", { method: "POST" }),
+
+  corpus: () => req<CorpusCounts>("/api/corpus"),
+  addExample: (text: string, label: "humano" | "ia" | "mixto") =>
+    req<{ saved: string; words: number; note: string | null; counts: CorpusCounts }>(
+      "/api/corpus/example",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, label }),
+      }
+    ),
+  undoLastExample: () =>
+    req<{ deleted: string; label: string; counts: CorpusCounts }>(
+      "/api/corpus/last",
+      { method: "DELETE" }
+    ),
 
   references: () =>
     req<{ uploaded: { id: number; name: string }[]; from_folders: string[] }>(

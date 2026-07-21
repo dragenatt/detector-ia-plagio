@@ -64,9 +64,11 @@ MIN_WORDS = 40  # ignora textos demasiado cortos para tener rasgos estables
 
 
 def _read_texts(folder: Path) -> list[str]:
+    """Lee .txt/.md de la carpeta Y sus subcarpetas (recursivo), para incluir
+    los ejemplos que el usuario añade en training_data/<clase>/usuario/."""
     texts = []
     for ext in ("*.txt", "*.md"):
-        for fp in glob.glob(str(folder / ext)):
+        for fp in glob.glob(str(folder / "**" / ext), recursive=True):
             try:
                 txt = Path(fp).read_text(encoding="utf-8", errors="ignore").strip()
                 if len(txt.split()) >= MIN_WORDS:

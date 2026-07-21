@@ -22,3 +22,9 @@ class AnalyzeRequest(BaseModel):
 class ReferenceIn(BaseModel):
     name: str = Field(..., min_length=1)
     text: str = Field(..., min_length=1)
+
+
+class CorpusExampleIn(BaseModel):
+    """Ejemplo etiquetado que el usuario añade para enseñarle al detector."""
+    text: str = Field(..., min_length=1, description="Texto de ejemplo.")
+    label: str = Field(..., description="Etiqueta: humano, ia o mixto.")

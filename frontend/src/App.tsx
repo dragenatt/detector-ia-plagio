@@ -15,6 +15,8 @@ import { HistorySidebar } from "./components/HistorySidebar";
 import { Disclaimer } from "./components/Disclaimer";
 import { BatchPanel } from "./components/BatchPanel";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { TrainPanel } from "./components/TrainPanel";
+import { ThumbsUp, Bot } from "lucide-react";
 
 export default function App() {
   const { theme, toggle } = useTheme();
@@ -26,6 +28,8 @@ export default function App() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [model, setModel] = useState<ModelStatus | null>(null);
   const [training, setTraining] = useState(false);
+  const [view, setView] = useState<"analyze" | "train">("analyze");
+  const [feedback, setFeedback] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try { setHistory(await api.history()); } catch { /* backend apagado */ }
@@ -35,7 +39,7 @@ export default function App() {
   useEffect(() => { refresh(); }, [refresh]);
 
   const handleText = async (text: string) => {
-    setLoading(true); setError(null);
+    setLoading(true); setError(null); setFeedback(null);
     try {
       const r = await api.analyzeText(text);
       setBatch(null); setResult(r); setAnalyzedText(r.analyzed_text ?? text); refresh();
@@ -44,7 +48,7 @@ export default function App() {
   };
 
   const handleFile = async (file: File) => {
-    setLoading(true); setError(null);
+    setLoading(true); setError(null); setFeedback(null);
     try {
       const r = await api.analyzeFile(file);
       setBatch(null); setResult(r);
@@ -54,7 +58,7 @@ export default function App() {
   };
 
   const handleBatch = async (files: File[]) => {
-    setLoading(true); setError(null);
+    setLoading(true); setError(null); setFeedback(null);
     try {
       const r = await api.analyzeBatch(files);
       setResult(null); setAnalyzedText(""); setBatch(r);
@@ -79,11 +83,40 @@ export default function App() {
     finally { setTraining(false); }
   };
 
+  const sendFeedback = async (label: "humano" | "ia") => {
+    if (!analyzedText) return;
+    setFeedback(null);
+    try {
+      await api.addExample(analyzedText, label);
+      setFeedback(label === "humano"
+        ? "Guardado como HUMANO. Reentrena en la pestaña «Entrenar» para que aprenda."
+        : "Guardado como IA. Reentrena en la pestaña «Entrenar» para que aprenda.");
+    } catch (e) { setFeedback("No se pudo guardar: " + (e as Error).message); }
+  };
+
   return (
     <div className="mx-auto max-w-6xl px-4 sm:px-6">
       <Header theme={theme} onToggleTheme={toggle} model={model}
         onTrain={train} training={training} />
 
+      <div className="mb-5 inline-flex rounded-full border border-line bg-surface-2 p-1 text-sm">
+        <button onClick={() => setView("analyze")}
+          className={`rounded-full px-5 py-1.5 font-medium transition ${
+            view === "analyze" ? "bg-surface text-ink shadow-soft" : "text-muted hover:text-ink"}`}>
+          Analizar
+        </button>
+        <button onClick={() => setView("train")}
+          className={`rounded-full px-5 py-1.5 font-medium transition ${
+            view === "train" ? "bg-surface text-ink shadow-soft" : "text-muted hover:text-ink"}`}>
+          Entrenar
+        </button>
+      </div>
+
+      {view === "train" ? (
+        <ErrorBoundary onReset={() => setView("analyze")}>
+          <TrainPanel onModelChange={refresh} />
+        </ErrorBoundary>
+      ) : (
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
         <main className="space-y-6">
           <InputPanel onAnalyzeText={handleText} onAnalyzeFile={handleFile}
@@ -122,6 +155,20 @@ export default function App() {
                     </div>
                   )}
                   <ScorePanel r={result} />
+
+                  {/* Enseñarle al detector: ¿acertó? corrígelo. */}
+                  {analyzedText && (
+                    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-paper p-3 text-sm">
+                      <span className="text-muted">¿Sabes qué era en realidad? Enséñale:</span>
+                      <button className="btn-ghost" onClick={() => sendFeedback("humano")}>
+                        <ThumbsUp size={15} /> Era humano
+                      </button>
+                      <button className="btn-ghost" onClick={() => sendFeedback("ia")}>
+                        <Bot size={15} /> Era IA
+                      </button>
+                      {feedback && <span className="text-accent-ink">{feedback}</span>}
+                    </div>
+                  )}
 
                   {result.id != null && (
                     <div className="flex justify-end">
@@ -164,6 +211,7 @@ export default function App() {
           onClear={async () => { await api.clearHistory(); refresh(); }}
         />
       </div>
+      )}
 
       <footer className="py-10 text-center text-xs text-muted">
         Veraz · proyecto académico de detección estimada · ningún detector es 100 % confiable.

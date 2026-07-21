@@ -117,6 +117,20 @@ Cada oración recibe un puntaje de IA y de plagio. En la interfaz, las oraciones
 con marcas de IA se resaltan en **ámbar con intensidad proporcional** al puntaje
 (más marcado = más "parece IA"), y las que coinciden con una fuente, en azul.
 
+### Entrenar el detector con tus propios ejemplos
+Veraz aprende de ti. En cada resultado hay botones **"Era humano" / "Era IA"**
+para corregirlo, y una pestaña **"Entrenar"** dedicada donde puedes:
+- Añadir textos etiquetados (humano / IA / mixto) al corpus con un clic.
+- Ver el **balance** del corpus (cuántos ejemplos de cada clase, cuáles son
+  tuyos) y un aviso si están desbalanceadas.
+- **Reentrenar** y ver el resultado (F1 por validación cruzada y calibración).
+- **Deshacer** el último ejemplo si te equivocaste.
+
+Tus ejemplos se guardan aparte, en `training_data/<clase>/usuario/`, para no
+mezclarlos con los de fábrica. Endpoints: `GET /api/corpus`,
+`POST /api/corpus/example`, `DELETE /api/corpus/last`. Cuantos más ejemplos
+variados le des, mejor distingue humano de IA.
+
 ### Análisis por lotes (varios archivos)
 La pestaña **"Varios archivos"** permite subir muchos trabajos a la vez (p. ej.
 toda una clase) y ver una **tabla comparativa** (IA %, plagio, originalidad,

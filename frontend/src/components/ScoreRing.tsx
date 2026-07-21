@@ -13,10 +13,11 @@ interface Props {
   sub?: string;
   token?: "good" | "source" | "ai" | "accent";
   size?: number;
+  level?: string;   // etiqueta "bajo/medio/alto" mostrada bajo el anillo
 }
 
 /** Anillo de puntaje con conteo animado y arco que se dibuja al aparecer. */
-export function ScoreRing({ value, label, sub, token = "accent", size = 138 }: Props) {
+export function ScoreRing({ value, label, sub, token = "accent", size = 150, level }: Props) {
   const [display, setDisplay] = useState(0);
 
   useEffect(() => {
@@ -59,7 +60,13 @@ export function ScoreRing({ value, label, sub, token = "accent", size = 138 }: P
       </div>
       <div className="text-center">
         <div className="text-sm font-semibold text-ink">{label}</div>
-        {sub && <div className="text-xs text-muted">{sub}</div>}
+        {level && (
+          <div className="mt-0.5 inline-block rounded-full px-2 py-0.5 text-xs font-medium"
+            style={{ background: `rgb(var(${TOKEN[token]}) / 0.15)`, color }}>
+            {level}
+          </div>
+        )}
+        {sub && <div className="mt-0.5 text-xs text-muted">{sub}</div>}
       </div>
     </div>
   );

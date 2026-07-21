@@ -13,6 +13,7 @@ from __future__ import annotations
 import glob
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
 
@@ -26,7 +27,7 @@ logger = logging.getLogger("veraz.api")
 from . import config, db, extract, report
 from .analysis.engine import analyze as run_analysis
 from .model.trainer import load_model, train as train_model
-from .schemas import AnalyzeRequest, ReferenceIn
+from .schemas import AnalyzeRequest, CorpusExampleIn, ReferenceIn
 
 
 @asynccontextmanager
@@ -354,6 +355,78 @@ def train_endpoint() -> dict:
     if result.get("trained"):
         app.state.model = load_model(config.MODEL_PATH)  # recarga en caliente
     return result
+
+
+# --------------------------------------------------------------------------- #
+# Corpus: enseñar al detector qué es humano y qué es IA (etiquetado del usuario)
+# --------------------------------------------------------------------------- #
+# Los ejemplos del usuario van a training_data/<clase>/usuario/ para no
+# mezclarlos con los de fábrica y poder distinguirlos/deshacerlos.
+
+USER_LABELS = {"humano", "ia", "mixto"}
+MIN_TRAIN_WORDS = 40  # coincide con trainer.MIN_WORDS: menos no entrena
+
+
+def _user_dir(label: str) -> Path:
+    return config.TRAINING_DIR / label / "usuario"
+
+
+def _corpus_counts() -> dict:
+    """Conteo de ejemplos por clase, distinguiendo fábrica vs. usuario."""
+    out: dict[str, dict] = {}
+    for label in ("humano", "ia", "mixto", "original", "plagiado"):
+        folder = config.TRAINING_DIR / label
+        total = len(glob.glob(str(folder / "**" / "*.txt"), recursive=True)) if folder.exists() else 0
+        user = len(glob.glob(str(_user_dir(label) / "*.txt"))) if _user_dir(label).exists() else 0
+        out[label] = {"total": total, "user": user}
+    # Eje binario del detector (humano vs IA).
+    human = out["humano"]["total"] + out["original"]["total"] + out["plagiado"]["total"]
+    ai = out["ia"]["total"]
+    balanced = min(human, ai) / max(human, ai, 1)
+    return {"by_label": out, "human_axis": human, "ai_axis": ai,
+            "balanced": round(balanced, 2)}
+
+
+@app.get("/api/corpus")
+def corpus_counts() -> dict:
+    return _corpus_counts()
+
+
+@app.post("/api/corpus/example")
+def corpus_add_example(ex: CorpusExampleIn) -> dict:
+    label = (ex.label or "").strip().lower()
+    if label not in USER_LABELS:
+        raise HTTPException(400, f"Etiqueta inválida: usa {', '.join(sorted(USER_LABELS))}.")
+    text = (ex.text or "").strip()
+    if not text:
+        raise HTTPException(400, "El texto está vacío.")
+    folder = _user_dir(label)
+    folder.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+    path = folder / f"user_{ts}.txt"
+    path.write_text(text, encoding="utf-8")
+    words = len(text.split())
+    note = None
+    if words < MIN_TRAIN_WORDS:
+        note = (f"Guardado, pero tiene {words} palabras: los textos de menos de "
+                f"{MIN_TRAIN_WORDS} no se usan al entrenar (poca señal).")
+    return {"saved": str(path.name), "label": label, "words": words,
+            "note": note, "counts": _corpus_counts()}
+
+
+@app.delete("/api/corpus/last")
+def corpus_undo_last() -> dict:
+    """Borra el ejemplo de usuario añadido más recientemente (deshacer)."""
+    candidates = []
+    for label in USER_LABELS:
+        for fp in glob.glob(str(_user_dir(label) / "*.txt")):
+            candidates.append(Path(fp))
+    if not candidates:
+        raise HTTPException(404, "No hay ejemplos de usuario para deshacer.")
+    last = max(candidates, key=lambda p: p.stat().st_mtime)
+    label = last.parent.parent.name
+    last.unlink()
+    return {"deleted": last.name, "label": label, "counts": _corpus_counts()}
 
 
 # --------------------------------------------------------------------------- #
