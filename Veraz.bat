@@ -54,7 +54,7 @@ if not exist ".venv\Scripts\python.exe" (
 set "VENV_PY=.venv\Scripts\python.exe"
 
 REM Verificar version de Python dentro del entorno virtual (FastAPI requiere 3.8+).
-"%VENV_PY%" check_runtime.py --version
+"%VENV_PY%" -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 8) else 1)"
 if errorlevel 1 (
     echo [ERROR] Veraz necesita Python 3.8 o superior.
     echo         Borra la carpeta backend\.venv despues de instalar una version compatible
@@ -73,7 +73,7 @@ if not exist ".venv\.deps_ok" (
         pause
         exit /b 1
     )
-    "%VENV_PY%" check_runtime.py --deps
+    "%VENV_PY%" -c "import fastapi, uvicorn, pydantic, multipart, pypdf, docx, fpdf"
     if errorlevel 1 (
         echo [ERROR] Las dependencias se instalaron, pero no se pueden importar.
         echo         Borra backend\.venv y vuelve a ejecutar Veraz.bat.
@@ -84,7 +84,7 @@ if not exist ".venv\.deps_ok" (
 )
 
 REM Si el marcador existe pero el entorno quedo incompleto, reinstalar.
-"%VENV_PY%" check_runtime.py --deps >nul 2>nul
+"%VENV_PY%" -c "import fastapi, uvicorn, pydantic, multipart, pypdf, docx, fpdf" >nul 2>nul
 if errorlevel 1 (
     echo [2/3] Reparando dependencias incompletas...
     del /q ".venv\.deps_ok" >nul 2>nul
